@@ -4,6 +4,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import { predictGlucoseResponse } from "./glycemic";
 import { estimateNutrition, dishFromEstimate } from "./nutrition-estimate";
 import type { UserProfile } from "./profile";
+import { swiggyImageUrl } from "./swiggy-image";
 
 /**
  * Real Swiggy Food MCP tools. Schemas mirror the published reference at
@@ -66,28 +67,55 @@ async function callSwiggy(client: Client, name: string, args: Record<string, unk
   return parsed ?? { success: false, error: { message: `${name} returned no content` } };
 }
 
-/** Adds a glucose forecast to a real menu item when we can estimate its macros. */
-function scoreRealItem(
-  item: { id?: string; name: string; description?: string; price?: number; isVeg?: boolean },
-  profile: UserProfile
-) {
+interface RawMenuItem {
+  id?: string;
+  name: string;
+  description?: string;
+  price?: number;
+  isVeg?: boolean;
+  imageUrl?: string;
+  restaurantId?: string;
+  restaurantName?: string;
+  rating?: string | number;
+  totalRatings?: string;
+  inStock?: number | boolean;
+  hasVariants?: boolean;
+  hasAddons?: boolean;
+}
+
+/**
+ * Adds a glucose forecast to a real menu item, and carries through the fields
+ * Swiggy already returns. These used to be dropped on the floor, which is why
+ * the UI had no images, no restaurant attribution and no stock state.
+ */
+function scoreRealItem(item: RawMenuItem, profile: UserProfile) {
+  const base = {
+    id: item.id,
+    name: item.name,
+    price: item.price,
+    is_veg: item.isVeg,
+    image_url: swiggyImageUrl(item.imageUrl),
+    restaurant_id: item.restaurantId,
+    restaurant_name: item.restaurantName,
+    rating: item.rating,
+    total_ratings: item.totalRatings,
+    // Swiggy sends 0/1 as often as a boolean; absent means "assume available".
+    in_stock: item.inStock === undefined ? true : Boolean(item.inStock),
+    // Variant/addon items have a "from" price that changes at cart time.
+    has_options: Boolean(item.hasVariants || item.hasAddons)
+  };
+
   const est = estimateNutrition(item.name, item.description);
   if (!est) {
     return {
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      is_veg: item.isVeg,
+      ...base,
       glycemic: null,
       note: "no nutrition estimate available — not scored"
     };
   }
   const pred = predictGlucoseResponse(dishFromEstimate(item, est), profile);
   return {
-    id: item.id,
-    name: item.name,
-    price: item.price,
-    is_veg: item.isVeg,
+    ...base,
     glycemic: {
       predicted_peak_mg_dl: pred.peakMgDl,
       match_score: pred.matchScore,
@@ -142,10 +170,15 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
         const res = await callSwiggy(client, "get_restaurant_menu", { addressId, restaurantId, page, pageSize });
         if (res?.success === false) return res;
 
-        const data = res?.data ?? res;
+        const data = unwrapSwiggy<any>(res);
         const categories = (data?.categories ?? []).map((cat: any) => ({
           title: cat.title,
-          items: (cat.items ?? []).map((it: any) => scoreRealItem(it, profile))
+          items: (cat.items ?? []).map((it: any) =>
+            scoreRealItem(
+              { ...it, restaurantId: data?.id, restaurantName: data?.name },
+              profile
+            )
+          )
         }));
         return {
           restaurant: {
@@ -177,14 +210,22 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
         const res = await callSwiggy(client, "search_menu", { addressId, query, vegFilter, offset });
         if (res?.success === false) return res;
 
-        const data = res?.data ?? res;
+        const data = unwrapSwiggy<any>(res);
         const scored = (data?.items ?? []).map((it: any) =>
           scoreRealItem(
             {
               id: it.menu_item_id,
               name: it.name,
               price: it.price,
-              isVeg: it.isVeg
+              isVeg: it.isVeg,
+              imageUrl: it.imageUrl,
+              restaurantId: it.restaurant_id,
+              restaurantName: it.restaurant_name,
+              rating: it.rating,
+              totalRatings: it.totalRatings,
+              inStock: it.inStock,
+              hasVariants: it.hasVariants,
+              hasAddons: it.hasAddons
             },
             profile
           )

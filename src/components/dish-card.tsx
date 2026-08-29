@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, HelpCircle } from "lucide-react";
+import Image from "next/image";
+import { ChevronDown, HelpCircle, Star, UtensilsCrossed } from "lucide-react";
 import { GlucoseChart } from "./glucose-chart";
 import { formatINR, cn } from "@/lib/utils";
 
@@ -11,6 +12,13 @@ export interface ScoredItem {
   name: string;
   price?: number;
   is_veg?: boolean;
+  image_url?: string | null;
+  restaurant_id?: string;
+  restaurant_name?: string;
+  rating?: string | number;
+  total_ratings?: string;
+  in_stock?: boolean;
+  has_options?: boolean;
   glycemic: {
     predicted_peak_mg_dl: number;
     match_score: number;
@@ -32,74 +40,121 @@ const VERDICT = {
   poor: { dot: "bg-ember", text: "text-ember-text", label: "Avoid" }
 } as const;
 
-/**
- * Compact by default: one scannable row per dish so several options can be
- * compared at a glance, with the curve and macros one tap away. Rendering a
- * full 100px chart per dish turned five results into an unreadable wall.
- */
-export function DishCard({ item, rank }: { item: ScoredItem; rank?: number }) {
+export function DishCard({
+  item,
+  rank,
+  onAddToCart
+}: {
+  item: ScoredItem;
+  rank?: number;
+  onAddToCart?: (item: ScoredItem) => void;
+}) {
   const [open, setOpen] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
   const g = item.glycemic;
   const v = g ? VERDICT[g.verdict] : null;
+  const outOfStock = item.in_stock === false;
+  const showImage = item.image_url && !imgFailed;
 
   return (
-    <div className="card-solid overflow-hidden">
+    <div className={cn("card-solid overflow-hidden", outOfStock && "opacity-60")}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-cream-deep/40 transition-colors"
+        className="w-full text-left p-3 flex items-start gap-3 hover:bg-cream-deep/40 transition-colors"
       >
-        {item.is_veg !== undefined && (
-          <span
-            className={cn(
-              "shrink-0 inline-flex items-center justify-center size-3.5 border",
-              item.is_veg ? "border-leaf-text" : "border-ember-text"
-            )}
-            aria-label={item.is_veg ? "vegetarian" : "non-vegetarian"}
-          >
-            <span className={cn("size-1.5 rounded-full", item.is_veg ? "bg-leaf-text" : "bg-ember-text")} />
-          </span>
-        )}
+        {/* Thumbnail, with a tinted placeholder when Swiggy gives us nothing usable */}
+        <span className="relative shrink-0 size-16 rounded-xl overflow-hidden bg-cream-deep flex items-center justify-center">
+          {showImage ? (
+            <Image
+              src={item.image_url!}
+              alt=""
+              fill
+              sizes="64px"
+              className="object-cover"
+              onError={() => setImgFailed(true)}
+            />
+          ) : (
+            <UtensilsCrossed size={20} className="text-ink-muted" aria-hidden />
+          )}
+        </span>
 
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium leading-snug break-words line-clamp-2">
-            {rank !== undefined && <span className="text-ink-muted mr-1.5">{rank}.</span>}
-            {item.name}
+          <span className="flex items-start gap-1.5">
+            {item.is_veg !== undefined && (
+              <span
+                className={cn(
+                  "mt-0.5 shrink-0 inline-flex items-center justify-center size-3.5 border",
+                  item.is_veg ? "border-leaf-text" : "border-ember-text"
+                )}
+                aria-label={item.is_veg ? "vegetarian" : "non-vegetarian"}
+              >
+                <span
+                  className={cn("size-1.5 rounded-full", item.is_veg ? "bg-leaf-text" : "bg-ember-text")}
+                />
+              </span>
+            )}
+            <span className="block text-sm font-medium leading-snug break-words line-clamp-2">
+              {rank !== undefined && <span className="text-ink-muted mr-1">{rank}.</span>}
+              {item.name}
+            </span>
           </span>
-          <span className="block text-xs text-ink-muted mt-0.5">
-            {typeof item.price === "number" && item.price > 0 ? formatINR(item.price) : "price unavailable"}
+
+          {item.restaurant_name && (
+            <span className="flex items-center gap-1.5 mt-1 text-xs text-ink-muted">
+              <span className="truncate max-w-[60%]">{item.restaurant_name}</span>
+              {item.rating && (
+                <span className="inline-flex items-center gap-0.5 shrink-0">
+                  <Star size={10} className="fill-leaf-text text-leaf-text" />
+                  {item.rating}
+                </span>
+              )}
+            </span>
+          )}
+
+          <span className="block text-xs text-ink-muted mt-1">
+            {typeof item.price === "number" && item.price > 0 ? (
+              <>
+                {item.has_options && "from "}
+                {formatINR(item.price)}
+              </>
+            ) : (
+              "price unavailable"
+            )}
             {g && (
               <>
                 {" · "}
                 {g.calories} kcal · {g.carbs_g}g carbs
               </>
             )}
+            {outOfStock && <span className="text-ember-text"> · out of stock</span>}
           </span>
         </span>
 
-        {g ? (
-          <span className="shrink-0 text-right">
-            <span className="flex items-center gap-1.5 justify-end">
-              <span className={cn("size-2 rounded-full", v!.dot)} />
-              <span className="text-sm font-medium tabular-nums">{g.predicted_peak_mg_dl}</span>
+        <span className="shrink-0 flex items-center gap-2">
+          {g ? (
+            <span className="text-right">
+              <span className="flex items-center gap-1.5 justify-end">
+                <span className={cn("size-2 rounded-full", v!.dot)} />
+                <span className="text-sm font-medium tabular-nums">{g.predicted_peak_mg_dl}</span>
+              </span>
+              <span className={cn("block text-xs", v!.text)}>{v!.label}</span>
             </span>
-            <span className={cn("block text-xs", v!.text)}>{v!.label}</span>
-          </span>
-        ) : (
-          <span className="shrink-0 inline-flex items-center gap-1 text-xs text-ink-muted">
-            <HelpCircle size={13} /> not scored
-          </span>
-        )}
-
-        <ChevronDown
-          size={15}
-          className={cn("shrink-0 text-ink-muted transition-transform", open && "rotate-180")}
-        />
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-ink-muted">
+              <HelpCircle size={13} /> not scored
+            </span>
+          )}
+          <ChevronDown
+            size={15}
+            className={cn("text-ink-muted transition-transform", open && "rotate-180")}
+          />
+        </span>
       </button>
 
       {open && (
-        <div className="px-4 pb-4 pt-1 border-t border-ink/8">
+        <div className="px-3 pb-3 border-t border-ink/8">
           {g ? (
             <>
               <div className="grid grid-cols-4 gap-2 my-3 text-center">
@@ -134,6 +189,16 @@ export function DishCard({ item, rank }: { item: ScoredItem; rank?: number }) {
               We couldn&apos;t recognise this dish well enough to estimate its glucose impact,
               so we&apos;re not guessing. Treat it as unknown.
             </p>
+          )}
+
+          {onAddToCart && item.restaurant_id && !outOfStock && (
+            <button
+              type="button"
+              onClick={() => onAddToCart(item)}
+              className="btn-swiggy w-full mt-3 py-2.5 text-sm"
+            >
+              Add to cart
+            </button>
           )}
         </div>
       )}

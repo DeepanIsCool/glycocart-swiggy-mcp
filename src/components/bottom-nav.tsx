@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, User, Settings } from "lucide-react";
+import { MessageSquare, ShoppingBag, User, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/chat", label: "Chat", Icon: MessageSquare },
+  { href: "/cart", label: "Cart", Icon: ShoppingBag },
   { href: "/profile", label: "Profile", Icon: User },
   { href: "/settings", label: "Settings", Icon: Settings }
 ];

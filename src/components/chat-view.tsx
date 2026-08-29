@@ -18,6 +18,7 @@ export interface ProfileView {
   dailyCalTarget: number;
   blocklist: string[];
   fastingBaseline: number;
+  defaultAddressId?: string;
 }
 
 /** Mirrors the server-side default in /api/chat so the UI names what's actually running. */
@@ -42,6 +43,46 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [cartNotice, setCartNotice] = useState<string | null>(null);
+
+  /**
+   * Add straight to the real Swiggy cart. The single-restaurant conflict is
+   * detected server-side and surfaced here rather than silently wiping the cart.
+   */
+  async function addToCart(item: ScoredItem) {
+    if (!profile.defaultAddressId) {
+      setCartNotice("Pick a delivery address in Settings first.");
+      return;
+    }
+    setCartNotice(null);
+    try {
+      const res = await fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId: item.restaurant_id,
+          restaurantName: item.restaurant_name,
+          addressId: profile.defaultAddressId,
+          menuItemId: item.id,
+          quantity: 1
+        })
+      });
+      const data = await res.json();
+      if (data?.conflict === "different_restaurant") {
+        setCartNotice(
+          `Your cart already has items from ${data.current_restaurant}. Swiggy carts hold one restaurant at a time — empty it from the Cart tab to start a new one.`
+        );
+        return;
+      }
+      if (!res.ok || data?.success === false) {
+        setCartNotice(data?.error?.message ?? data?.message ?? "Couldn't add that to your cart.");
+        return;
+      }
+      setCartNotice(`Added ${item.name} to your Swiggy cart.`);
+    } catch {
+      setCartNotice("Couldn't reach Swiggy. Try again.");
+    }
+  }
 
   const { messages, input, handleInputChange, isLoading, append, setInput, error } = useChat({
     api: "/api/chat",
@@ -225,7 +266,12 @@ export function ChatView({ profile }: { profile: ProfileView }) {
                   ))}
 
                   {extractScoredItems(m).map((item, i) => (
-                    <DishCard key={`${item.id ?? item.name}-${i}`} item={item} rank={i + 1} />
+                    <DishCard
+                      key={`${item.id ?? item.name}-${i}`}
+                      item={item}
+                      rank={i + 1}
+                      onAddToCart={addToCart}
+                    />
                   ))}
 
                   {hasEmptyResult(m) && extractScoredItems(m).length === 0 && (
@@ -249,6 +295,12 @@ export function ChatView({ profile }: { profile: ProfileView }) {
           ))}
 
           {isLoading && messages[messages.length - 1]?.role === "user" && <ThinkingDots />}
+
+          {cartNotice && (
+            <p className="text-sm text-leaf-text bg-leaf-pale/50 rounded-xl px-4 py-2.5">
+              {cartNotice}
+            </p>
+          )}
 
           {error && (
             <p className="text-sm text-ember-text">

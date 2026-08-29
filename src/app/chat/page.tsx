@@ -20,7 +20,8 @@ export default async function ChatPage() {
     conditionLabel: profile.conditionLabel,
     dailyCalTarget: profile.dailyCalTarget,
     blocklist: profile.blocklist,
-    fastingBaseline: profile.metabolic.fastingBaseline
+    fastingBaseline: profile.metabolic.fastingBaseline,
+    defaultAddressId: profile.defaultAddressId
   };
 
   return (
