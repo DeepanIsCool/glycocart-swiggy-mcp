@@ -55,7 +55,9 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? "Couldn't save your profile.");
+        throw new Error(
+          [body.error ?? "Couldn't save your profile.", body.detail].filter(Boolean).join(" — ")
+        );
       }
       router.push("/chat");
       router.refresh();

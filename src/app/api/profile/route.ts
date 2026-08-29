@@ -49,9 +49,18 @@ export async function POST(req: Request) {
     await saveProfile(uid, profile);
   } catch (err) {
     console.error("Saving profile failed", err);
+    // Surface a diagnosable reason rather than a blanket message — a silent
+    // "try again" on a misconfigured deployment just loops the user forever.
+    const detail = err instanceof Error ? err.message.split("\n")[0] : String(err);
+    const isConfig = detail.includes("DATABASE_URL");
     return NextResponse.json(
-      { error: "Couldn't save your profile. Please try again." },
-      { status: 500 }
+      {
+        error: isConfig
+          ? "The server isn't connected to its database yet. This is a configuration problem, not something you did."
+          : "Couldn't save your profile. Please try again.",
+        detail
+      },
+      { status: isConfig ? 503 : 500 }
     );
   }
 
