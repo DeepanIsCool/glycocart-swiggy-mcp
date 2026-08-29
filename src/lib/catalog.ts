@@ -1,7 +1,10 @@
 /**
- * Catalog: 8 restaurants, 30+ dishes from across Indian cuisines.
+ * Food composition reference for common Indian dishes.
  * Macros + glycemic index estimates derived from IFCT-2017 + USDA composition tables.
- * In production, this dataset is built via vision LLM + crowd-sourced CGM responses.
+ *
+ * Swiggy publishes no per-dish nutrition, so this table is what
+ * `nutrition-estimate.ts` matches real menu item names against in order to
+ * predict a glucose response. It is a reference dataset, not a demo catalog.
  */
 
 export interface Dish {
@@ -21,17 +24,6 @@ export interface Dish {
   gl: number;
   tags: string[];
   veg: boolean;
-}
-
-export interface Restaurant {
-  id: string;
-  name: string;
-  cuisine: string;
-  area: string;
-  rating: number;
-  deliveryMin: number;
-  costForTwo: number;
-  dishIds: string[];
 }
 
 export const DISHES: Record<string, Dish> = {
@@ -187,49 +179,9 @@ export const DISHES: Record<string, Dish> = {
   }
 };
 
-export const RESTAURANTS: Restaurant[] = [
-  {
-    id: "r_punjab_grill", name: "Punjab Grill", cuisine: "North Indian",
-    area: "Indiranagar", rating: 4.4, deliveryMin: 28, costForTwo: 800,
-    dishIds: ["d_dal_tadka", "d_jeera_rice", "d_paneer_tikka", "d_paneer_butter",
-              "d_butter_chicken", "d_butter_naan", "d_chicken_tikka", "d_palak_paneer", "d_rajma", "d_raita"]
-  },
-  {
-    id: "r_paradise", name: "Paradise Biryani", cuisine: "Hyderabadi",
-    area: "HSR Layout", rating: 4.2, deliveryMin: 35, costForTwo: 700,
-    dishIds: ["d_chicken_biryani", "d_raita", "d_chicken_tikka"]
-  },
-  {
-    id: "r_dosa_camp", name: "Dosa Camp", cuisine: "South Indian",
-    area: "Koramangala", rating: 4.5, deliveryMin: 22, costForTwo: 400,
-    dishIds: ["d_dosa_masala", "d_idli_sambar", "d_ragi_roti", "d_buttermilk"]
-  },
-  {
-    id: "r_eat_better", name: "Eat Better Co.", cuisine: "Modern Healthy",
-    area: "Indiranagar", rating: 4.6, deliveryMin: 32, costForTwo: 900,
-    dishIds: ["d_quinoa_pulao", "d_oats_khichdi", "d_millet_khichdi", "d_tofu_stirfry",
-              "d_greek_salad", "d_egg_bhurji", "d_grilled_fish"]
-  },
-  {
-    id: "r_punjabi_dhaba", name: "Sardarji Da Dhaba", cuisine: "Punjabi",
-    area: "MG Road", rating: 4.1, deliveryMin: 38, costForTwo: 600,
-    dishIds: ["d_chole_bhature", "d_butter_chicken", "d_butter_naan", "d_sweet_lassi", "d_rajma"]
-  },
-  {
-    id: "r_coastal", name: "Mangalore Pearl", cuisine: "Coastal",
-    area: "Brigade Road", rating: 4.5, deliveryMin: 40, costForTwo: 1200,
-    dishIds: ["d_grilled_fish", "d_brown_rice", "d_buttermilk", "d_palak_paneer"]
-  }
-];
-
 export function getDish(id: string) {
   const d = DISHES[id];
   if (!d) throw new Error(`Dish not found: ${id}`);
   return d;
 }
 
-export function getRestaurantWithMenu(id: string) {
-  const r = RESTAURANTS.find((x) => x.id === id);
-  if (!r) throw new Error(`Restaurant not found: ${id}`);
-  return { ...r, menu: r.dishIds.map(getDish) };
-}

@@ -3,7 +3,7 @@ import { tool } from "ai";
 import type { Client } from "@modelcontextprotocol/client";
 import { predictGlucoseResponse } from "./glycemic";
 import { estimateNutrition, dishFromEstimate } from "./nutrition-estimate";
-import type { Persona } from "./personas";
+import type { UserProfile } from "./profile";
 
 /**
  * Real Swiggy Food MCP tools. Schemas mirror the published reference at
@@ -38,7 +38,7 @@ async function callSwiggy(client: Client, name: string, args: Record<string, unk
 /** Adds a glucose forecast to a real menu item when we can estimate its macros. */
 function scoreRealItem(
   item: { id?: string; name: string; description?: string; price?: number; isVeg?: boolean },
-  persona: Persona
+  profile: UserProfile
 ) {
   const est = estimateNutrition(item.name, item.description);
   if (!est) {
@@ -51,7 +51,7 @@ function scoreRealItem(
       note: "no nutrition estimate available — not scored"
     };
   }
-  const pred = predictGlucoseResponse(dishFromEstimate(item, est), persona);
+  const pred = predictGlucoseResponse(dishFromEstimate(item, est), profile);
   return {
     id: item.id,
     name: item.name,
@@ -61,16 +61,20 @@ function scoreRealItem(
       predicted_peak_mg_dl: pred.peakMgDl,
       match_score: pred.matchScore,
       verdict: pred.verdict,
+      calories: est.calories,
       carbs_g: est.carbs,
       protein_g: est.protein,
       fiber_g: est.fiber,
       estimate_confidence: est.confidence,
-      estimate_basis: est.basis
+      estimate_basis: est.basis,
+      // Sent so the UI can draw the curve without the browser ever holding
+      // the user's metabolic profile.
+      curve: pred.curve
     }
   };
 }
 
-export function buildSwiggyTools(client: Client, persona: Persona) {
+export function buildSwiggyTools(client: Client, profile: UserProfile) {
   return {
     get_addresses: tool({
       description:
@@ -110,7 +114,7 @@ export function buildSwiggyTools(client: Client, persona: Persona) {
         const data = res?.data ?? res;
         const categories = (data?.categories ?? []).map((cat: any) => ({
           title: cat.title,
-          items: (cat.items ?? []).map((it: any) => scoreRealItem(it, persona))
+          items: (cat.items ?? []).map((it: any) => scoreRealItem(it, profile))
         }));
         return {
           restaurant: {
@@ -151,7 +155,7 @@ export function buildSwiggyTools(client: Client, persona: Persona) {
               price: it.price,
               isVeg: it.isVeg
             },
-            persona
+            profile
           )
         );
 

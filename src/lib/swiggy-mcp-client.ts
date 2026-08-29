@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
+import { randomUUID } from "crypto";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { CookieOAuthProvider } from "./swiggy-oauth-provider";
+import { deriveUid } from "./crypto";
 
 export const SWIGGY_FOOD_MCP_URL = "https://mcp.swiggy.com/food";
 
@@ -43,4 +45,30 @@ export async function getSwiggyClient(): Promise<Client | null> {
     console.error("Swiggy MCP connect failed", err);
     return null;
   }
+}
+
+/**
+ * Resolve a stable, pseudonymous user id for the freshly-authenticated Swiggy
+ * account by hashing the phone number on their saved address. We never store
+ * the number itself — only the salted hash — so the profile row holds no
+ * directly identifying data.
+ *
+ * Falls back to a random id when the account has no saved address (that user
+ * cannot search Swiggy anyway until they add one; their profile still saves,
+ * it just won't follow them to another device).
+ */
+export async function resolveUidFromSwiggy(client: Client): Promise<string> {
+  try {
+    const res = await client.callTool({ name: "get_addresses", arguments: {} });
+    const first = (res.content as { type?: string; text?: string }[] | undefined)?.[0];
+    const parsed =
+      (res.structuredContent as any) ??
+      (first?.type === "text" && first.text ? JSON.parse(first.text) : undefined);
+
+    const phone = parsed?.data?.addresses?.[0]?.phoneNumber;
+    if (typeof phone === "string" && phone.trim()) return deriveUid(phone.trim());
+  } catch (err) {
+    console.error("Could not resolve Swiggy identity from addresses", err);
+  }
+  return randomUUID();
 }

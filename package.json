@@ -2,7 +2,7 @@
   "name": "glycocart",
   "version": "0.1.0",
   "private": true,
-  "description": "Glucose-aware ordering agent for PCOS, prediabetes, and CGM users — built on Swiggy MCP",
+  "description": "Glucose-aware ordering agent for PCOS, prediabetes, and CGM users \u2014 built on Swiggy MCP",
   "engines": {
     "node": ">=20"
   },
@@ -12,11 +12,14 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:nutrition": "tsc src/lib/nutrition-estimate.test.ts src/lib/nutrition-estimate.ts src/lib/catalog.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/nutrition-estimate.test.js"
+    "test:nutrition": "tsc src/lib/nutrition-estimate.test.ts src/lib/nutrition-estimate.ts src/lib/catalog.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/nutrition-estimate.test.js",
+    "test:profile": "tsc src/lib/profile.test.ts src/lib/profile.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/profile.test.js",
+    "test": "npm run test:nutrition && npm run test:profile"
   },
   "dependencies": {
     "@ai-sdk/openai": "1.0.7",
     "@modelcontextprotocol/client": "^2.0.0",
+    "@neondatabase/serverless": "^1.1.0",
     "ai": "4.0.14",
     "clsx": "2.1.1",
     "lucide-react": "0.468.0",

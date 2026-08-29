@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
+import { encrypt, decrypt, secureCookie } from "./crypto";
 import type {
   OAuthClientProvider,
   OAuthClientMetadata,
@@ -16,38 +16,6 @@ interface HandshakeState {
   discoveryState?: OAuthDiscoveryState;
   clientInformation?: StoredOAuthClientInformation;
 }
-
-function getKey(): Buffer {
-  const secret = process.env.SWIGGY_TOKEN_SECRET;
-  if (!secret) throw new Error("SWIGGY_TOKEN_SECRET is not set");
-  return createHash("sha256").update(secret).digest();
-}
-
-function encrypt(value: unknown): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", getKey(), iv);
-  const enc = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([iv, tag, enc]).toString("base64url");
-}
-
-function decrypt<T>(raw: string | undefined): T | undefined {
-  if (!raw) return undefined;
-  try {
-    const buf = Buffer.from(raw, "base64url");
-    const iv = buf.subarray(0, 12);
-    const tag = buf.subarray(12, 28);
-    const enc = buf.subarray(28);
-    const decipher = createDecipheriv("aes-256-gcm", getKey(), iv);
-    decipher.setAuthTag(tag);
-    const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
-    return JSON.parse(dec.toString("utf8")) as T;
-  } catch {
-    return undefined;
-  }
-}
-
-const secureCookie = process.env.NODE_ENV === "production";
 
 /**
  * OAuthClientProvider backed by httpOnly encrypted cookies — one short-lived

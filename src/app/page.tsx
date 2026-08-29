@@ -1,6 +1,5 @@
-import Link from "next/link";
 import Image from "next/image";
-import { ArrowUpRight, Activity, Heart, Clock, ShieldCheck, LineChart, type LucideIcon } from "lucide-react";
+import { ArrowUpRight, Clock, ShieldCheck, LineChart, type LucideIcon } from "lucide-react";
 
 export default function LandingPage() {
   return (
@@ -46,19 +45,20 @@ export default function LandingPage() {
           </div>
           <div className="md:col-span-4 animate-fade-up" style={{ animationDelay: "0.3s" }}>
             <p className="text-lg leading-relaxed text-ink-soft max-w-sm">
-              Connect your Swiggy account and GlycoCart estimates the glucose impact of
-              real dishes near you — ranked for PCOS, prediabetes and CGM users.
+              Sign in with Swiggy, answer a few questions about your body, and
+              GlycoCart estimates the glucose impact of real dishes near you —
+              built for PCOS, prediabetes and anyone watching their glucose.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row md:flex-col">
               <a
-                href="/api/auth/swiggy/login?p=pcos"
+                href="/api/auth/swiggy/login"
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-swiggy px-6 py-3.5 font-medium text-white transition-all hover:brightness-95 active:scale-[0.98]"
               >
-                Connect Swiggy &amp; start
+                Sign in with Swiggy
                 <ArrowUpRight size={16} />
               </a>
               <p className="mono text-ink-muted text-[0.65rem] self-center sm:self-start md:self-center">
-                or try the demo below · no signup
+                you&apos;ll need a swiggy account
               </p>
             </div>
           </div>
@@ -86,38 +86,6 @@ export default function LandingPage() {
             title="Decide in seconds"
             body="Dishes are ranked by predicted peak against your profile — so the safe choice is the first one you see, not the one you have to hunt for."
           />
-        </div>
-      </section>
-
-      {/* Persona selector */}
-      <section className="relative z-10 px-6 md:px-10 pb-20">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-baseline justify-between gap-4 mb-6 flex-wrap">
-            <p className="mono text-ink-muted animate-fade-up" style={{ animationDelay: "0.5s" }}>
-              or explore the demo · choose a persona
-            </p>
-            <p className="mono text-ink-muted text-[0.65rem]">no swiggy account needed</p>
-          </div>
-          <div className="grid md:grid-cols-2 gap-5">
-            <PersonaCard
-              href="/chat?p=pcos"
-              tag="pcos · insulin resistance"
-              title="Priya, 29"
-              subtitle="Bengaluru · Software Engineer"
-              body="Diagnosed PCOS 3 years ago. Pays ₹1,800/month to her dietitian for diet plans she struggles to translate to Swiggy. Wants something that just works."
-              accent={<Heart size={20} className="text-ember" />}
-              delay="0.7s"
-            />
-            <PersonaCard
-              href="/chat?p=cgm"
-              tag="cgm · prediabetic"
-              title="Arjun, 34"
-              subtitle="Mumbai · Product Lead"
-              body="Wears Ultrahuman M1. HbA1c 5.9. Already spent ₹50K this year on health. Tired of manually checking every menu against his glucose patterns."
-              accent={<Activity size={20} className="text-leaf" />}
-              delay="0.85s"
-            />
-          </div>
         </div>
       </section>
 
@@ -167,33 +135,6 @@ function Step({
       <h3 className="display text-xl mb-2">{title}</h3>
       <p className="text-sm text-ink-soft leading-relaxed">{body}</p>
     </div>
-  );
-}
-
-function PersonaCard({
-  href, tag, title, subtitle, body, accent, delay
-}: {
-  href: string; tag: string; title: string; subtitle: string; body: string;
-  accent: React.ReactNode; delay: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="card group p-8 md:p-10 hover:bg-cream-warm transition-all hover:-translate-y-0.5 animate-fade-up block"
-      style={{ animationDelay: delay }}
-    >
-      <div className="flex items-start justify-between mb-8">
-        <span className="mono text-ink-muted">{tag}</span>
-        {accent}
-      </div>
-      <h3 className="display text-3xl md:text-4xl mb-1">{title}</h3>
-      <p className="text-ink-muted mb-6">{subtitle}</p>
-      <p className="text-ink-soft leading-relaxed mb-8">{body}</p>
-      <div className="flex items-center gap-2 text-ink group-hover:gap-3 transition-all">
-        <span className="text-sm font-medium">Try the demo as {title.split(",")[0]}</span>
-        <ArrowUpRight size={16} className="group-hover:rotate-12 transition-transform" />
-      </div>
-    </Link>
   );
 }
 

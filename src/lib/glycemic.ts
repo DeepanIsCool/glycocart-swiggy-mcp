@@ -1,5 +1,5 @@
 import type { Dish } from "./catalog";
-import type { Persona } from "./personas";
+import type { UserProfile } from "./profile";
 
 /**
  * Personal glycemic prediction.
@@ -28,10 +28,11 @@ export interface GlucosePrediction {
   verdict: "excellent" | "good" | "moderate" | "poor";
 }
 
-const FASTING_BASELINE = 92; // mg/dL; reasonable mean for prediabetic Indians
-
-export function predictGlucoseResponse(dish: Dish, persona: Persona): GlucosePrediction {
-  const { metabolic } = persona;
+export function predictGlucoseResponse(dish: Dish, profile: UserProfile): GlucosePrediction {
+  const { metabolic } = profile;
+  // Per-user fasting baseline, set during onboarding from a stated lab value,
+  // an HbA1c-derived estimate, or a condition-level starting point.
+  const FASTING_BASELINE = metabolic.fastingBaseline;
 
   // Base spike from glycemic load, scaled by personal insulin sensitivity
   const sensitivityFactor = metabolic.insulinSensitivity;
@@ -99,13 +100,13 @@ export function predictGlucoseResponse(dish: Dish, persona: Persona): GlucosePre
  */
 export function rankDishesForUser(
   dishes: Dish[],
-  persona: Persona,
+  profile: UserProfile,
   opts: { mealTargetCal?: number } = {}
 ) {
-  const target = opts.mealTargetCal ?? persona.dailyCalTarget / 3;
+  const target = opts.mealTargetCal ?? profile.dailyCalTarget / 3;
   return dishes
     .map((d) => {
-      const pred = predictGlucoseResponse(d, persona);
+      const pred = predictGlucoseResponse(d, profile);
       const calFit = 100 - Math.min(100, (Math.abs(d.calories - target) / target) * 100);
       const overallScore = pred.matchScore * 0.7 + calFit * 0.3;
       return { dish: d, prediction: pred, overallScore: Math.round(overallScore) };

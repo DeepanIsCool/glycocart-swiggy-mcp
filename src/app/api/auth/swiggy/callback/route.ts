@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { auth } from "@modelcontextprotocol/client";
 import { CookieOAuthProvider } from "@/lib/swiggy-oauth-provider";
-import { SWIGGY_FOOD_MCP_URL, SWIGGY_REDIRECT_URI } from "@/lib/swiggy-mcp-client";
+import {
+  SWIGGY_FOOD_MCP_URL,
+  SWIGGY_REDIRECT_URI,
+  getSwiggyClient,
+  resolveUidFromSwiggy
+} from "@/lib/swiggy-mcp-client";
+import { setSessionUid } from "@/lib/session";
+import { getProfile } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -11,13 +17,9 @@ export async function GET(req: Request) {
   const code = url.searchParams.get("code");
   const iss = url.searchParams.get("iss") ?? undefined;
 
-  const jar = await cookies();
-  const persona = jar.get("swiggy_return_persona")?.value ?? "pcos";
-  jar.delete("swiggy_return_persona");
+  const fail = (reason: string) => NextResponse.redirect(new URL(`/?connect_error=${reason}`, req.url));
 
-  if (!code) {
-    return NextResponse.redirect(new URL(`/chat?p=${persona}&connect_error=1`, req.url));
-  }
+  if (!code) return fail("no_code");
 
   const provider = new CookieOAuthProvider(SWIGGY_REDIRECT_URI);
   try {
@@ -28,10 +30,28 @@ export async function GET(req: Request) {
       // See swiggy-mcp-client.ts for why this is required and safe here.
       skipIssuerMetadataValidation: true
     });
-    const status = result === "AUTHORIZED" ? "1" : "0";
-    return NextResponse.redirect(new URL(`/chat?p=${persona}&connected=${status}`, req.url));
+    if (result !== "AUTHORIZED") return fail("not_authorized");
   } catch (err) {
     console.error("Swiggy OAuth callback failed", err);
-    return NextResponse.redirect(new URL(`/chat?p=${persona}&connect_error=1`, req.url));
+    return fail("oauth_failed");
   }
+
+  // Establish who this is, so their profile follows the Swiggy account rather
+  // than the browser. Done once here, then cached in our own session cookie.
+  const client = await getSwiggyClient();
+  if (!client) return fail("session_unavailable");
+
+  const uid = await resolveUidFromSwiggy(client);
+  await setSessionUid(uid);
+
+  let hasProfile = false;
+  try {
+    hasProfile = !!(await getProfile(uid));
+  } catch (err) {
+    // A database outage must not strand a signed-in user on a dead end —
+    // send them to onboarding, which surfaces the real error if it persists.
+    console.error("Profile lookup failed", err);
+  }
+
+  return NextResponse.redirect(new URL(hasProfile ? "/chat" : "/onboarding", req.url));
 }
