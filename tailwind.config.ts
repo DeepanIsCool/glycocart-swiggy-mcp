@@ -9,7 +9,10 @@ const config: Config = {
         cream: { DEFAULT: "#F8F5EF", warm: "#F2EDE2", deep: "#EAE2D2" },
         leaf: { DEFAULT: "#0E7E5C", soft: "#7FB89F", pale: "#D8E8DF" },
         ember: { DEFAULT: "#D9613A", soft: "#F2A684" },
-        sage: { DEFAULT: "#B7C4B3" }
+        sage: { DEFAULT: "#B7C4B3" },
+        // Swiggy brand tokens — used where we're explicitly speaking as a
+        // Swiggy MCP integration, not as GlycoCart's own editorial identity.
+        swiggy: { DEFAULT: "#FC8019", ink: "#282C3F", muted: "#686B78" }
       },
       fontFamily: {
         display: ["Fraunces", "ui-serif", "Georgia", "serif"],

@@ -5,8 +5,10 @@ import { ChevronDown, ChevronRight, Loader2, CheckCircle2, Wrench } from "lucide
 import { cn } from "@/lib/utils";
 
 const TOOL_LABELS: Record<string, string> = {
+  get_addresses: "swiggy.get_addresses",
   search_restaurants: "swiggy.search_restaurants",
   get_restaurant_menu: "swiggy.get_restaurant_menu",
+  search_menu: "swiggy.search_menu",
   rank_dishes_for_user: "glycocart.rank_dishes",
   place_order: "swiggy.place_order"
 };

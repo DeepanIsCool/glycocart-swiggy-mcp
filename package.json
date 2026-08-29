@@ -11,7 +11,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:nutrition": "tsc src/lib/nutrition-estimate.test.ts src/lib/nutrition-estimate.ts src/lib/catalog.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/nutrition-estimate.test.js"
   },
   "dependencies": {
     "@ai-sdk/openai": "1.0.7",

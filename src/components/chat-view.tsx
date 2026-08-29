@@ -28,8 +28,15 @@ const PROMPT_BANK: Record<string, string[]> = {
   ]
 };
 
+const LIVE_PROMPTS = [
+  "What's the best lunch I can order near me right now?",
+  "Find biryani near me and tell me which won't spike me",
+  "Show me open restaurants near my home address",
+  "I want something high-protein under 500 kcal"
+];
+
 export function ChatView({ persona, swiggyConnected }: { persona: Persona; swiggyConnected: boolean }) {
-  const prompts = PROMPT_BANK[persona.id] ?? PROMPT_BANK.pcos;
+  const prompts = swiggyConnected ? LIVE_PROMPTS : PROMPT_BANK[persona.id] ?? PROMPT_BANK.pcos;
   const params = useSearchParams();
   const connectError = params.get("connect_error") === "1";
   const [orderConfirmation, setOrderConfirmation] = useState<any>(null);
@@ -246,7 +253,7 @@ export function ChatView({ persona, swiggyConnected }: { persona: Persona; swigg
       {/* Messages area */}
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-5 md:px-10 py-8 min-h-0 relative">
         <div className="max-w-3xl mx-auto space-y-5">
-          {empty && <EmptyState persona={persona} />}
+          {empty && <EmptyState persona={persona} swiggyConnected={swiggyConnected} />}
 
           {messages.map((m) => (
             <div key={m.id} className={cn("flex flex-col gap-3", m.role === "user" && "items-end")}>
@@ -348,7 +355,9 @@ export function ChatView({ persona, swiggyConnected }: { persona: Persona; swigg
           </button>
         </div>
         <p className="mono text-[0.6rem] text-ink-muted text-center mt-3">
-          demo · mock swiggy mcp · cod orders only · not medical advice
+          {swiggyConnected
+            ? "live swiggy mcp · glucose figures are estimates · not medical advice"
+            : "demo · mock swiggy mcp · cod orders only · not medical advice"}
         </p>
       </form>
 
@@ -373,7 +382,7 @@ function ContextChip({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EmptyState({ persona }: { persona: Persona }) {
+function EmptyState({ persona, swiggyConnected }: { persona: Persona; swiggyConnected: boolean }) {
   return (
     <div className="text-center py-12 animate-fade-up">
       <Image
@@ -385,12 +394,15 @@ function EmptyState({ persona }: { persona: Persona }) {
       />
       <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-leaf-pale text-leaf text-xs mb-6">
         <Sparkles size={12} />
-        <span className="mono">connected to swiggy mcp · mock</span>
+        <span className="mono">
+          {swiggyConnected ? "live swiggy mcp · your account" : "swiggy mcp · demo catalog"}
+        </span>
       </div>
       <h2 className="display text-3xl mb-3">Hi {persona.name}.</h2>
       <p className="text-ink-muted max-w-md mx-auto leading-relaxed">
-        I've loaded your metabolic profile. Ask me to find food, rank options,
-        or place an order — I'll keep your glucose curve in mind.
+        {swiggyConnected
+          ? "You're connected to your real Swiggy account. Ask me to find food near you — I'll estimate each dish's glucose impact for your profile."
+          : "I've loaded your metabolic profile. Ask me to find food, rank options, or place an order — I'll keep your glucose curve in mind."}
       </p>
     </div>
   );
