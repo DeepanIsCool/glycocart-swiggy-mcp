@@ -54,13 +54,19 @@ export function predictGlucoseResponse(dish: Dish, profile: UserProfile): Glucos
 
   const peak = FASTING_BASELINE + baseSpike;
 
-  // Build curve: gaussian-like rise + slower exponential decay
+  // Build curve: gaussian-like rise + slower exponential decay.
+  // The rising limb is normalised so it starts exactly at the fasting baseline
+  // at t=0; the raw gaussian is ~14% of the spike above baseline there, which
+  // showed up as a curve that began above the user's own stated fasting value.
+  const RISE_SHARPNESS = 1.4;
+  const riseAtZero = Math.exp(-Math.pow(RISE_SHARPNESS, 2));
   const curve: { t: number; mgDl: number }[] = [];
   for (let t = 0; t <= 180; t += 10) {
     let val: number;
     if (t < timeToPeak) {
       const x = t / timeToPeak;
-      val = FASTING_BASELINE + baseSpike * Math.exp(-Math.pow((1 - x) * 1.4, 2));
+      const raw = Math.exp(-Math.pow((1 - x) * RISE_SHARPNESS, 2));
+      val = FASTING_BASELINE + baseSpike * ((raw - riseAtZero) / (1 - riseAtZero));
     } else {
       const decay = (t - timeToPeak) / 80;
       val = FASTING_BASELINE + baseSpike * Math.exp(-decay);
@@ -81,8 +87,20 @@ export function predictGlucoseResponse(dish: Dish, profile: UserProfile): Glucos
   const aucPenalty = Math.max(0, auc / metabolic.baselineAUC - 1) * 35;
   const matchScore = Math.max(0, Math.min(100, Math.round(100 - peakPenalty - aucPenalty)));
 
-  const verdict: GlucosePrediction["verdict"] =
-    peak < 130 ? "excellent" : peak < 145 ? "good" : peak < 165 ? "moderate" : "poor";
+  // Verdict blends the ABSOLUTE peak (ADA's <140 mg/dL post-prandial target)
+  // with the RISE above this user's own baseline, taking the worse of the two.
+  //
+  // Absolute thresholds alone were useless for anyone with a low baseline: a
+  // user at 88 mg/dL with low carb sensitivity got "excellent" for pizza,
+  // biryani AND dessert, because nothing ever crossed 130. That is both
+  // undiscriminating and actively misleading in a metabolic-health app.
+  const rise = peak - FASTING_BASELINE;
+  const band = (v: number, t: [number, number, number]) =>
+    v < t[0] ? 0 : v < t[1] ? 1 : v < t[2] ? 2 : 3;
+  const severity = Math.max(band(peak, [130, 145, 165]), band(rise, [15, 30, 45]));
+  const verdict: GlucosePrediction["verdict"] = (
+    ["excellent", "good", "moderate", "poor"] as const
+  )[severity];
 
   return {
     peakMgDl: Math.round(peak),

@@ -5,9 +5,9 @@ import {
   SWIGGY_FOOD_MCP_URL,
   SWIGGY_REDIRECT_URI,
   getSwiggyClient,
-  resolveUidFromSwiggy
+  resolveUid
 } from "@/lib/swiggy-mcp-client";
-import { setSessionUid } from "@/lib/session";
+import { setSessionUid, getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -41,7 +41,9 @@ export async function GET(req: Request) {
   const client = await getSwiggyClient();
   if (!client) return fail("session_unavailable");
 
-  const uid = await resolveUidFromSwiggy(client);
+  // Reuse the id already in this browser's session if there is one, so a
+  // re-login on the same device keeps the existing profile.
+  const uid = await resolveUid(await getSessionUid());
   await setSessionUid(uid);
 
   let hasProfile = false;

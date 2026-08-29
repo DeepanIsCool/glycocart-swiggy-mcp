@@ -16,6 +16,19 @@ export async function callSwiggyRaw(client: Client, name: string, args: Record<s
   return callSwiggy(client, name, args);
 }
 
+/**
+ * Swiggy's payload envelope is inconsistent with its own docs: the reference
+ * shows `{ success, data: { ... } }`, but live responses put the payload at the
+ * top level with no `data` wrapper. Verified against a real `get_addresses`
+ * response. Always go through this rather than reaching for `.data` directly.
+ */
+export function unwrapSwiggy<T = any>(res: any): T {
+  if (res && typeof res === "object" && res.data && typeof res.data === "object") {
+    return res.data as T;
+  }
+  return res as T;
+}
+
 async function callSwiggy(client: Client, name: string, args: Record<string, unknown>) {
   const res = await client.callTool({ name, arguments: args });
 

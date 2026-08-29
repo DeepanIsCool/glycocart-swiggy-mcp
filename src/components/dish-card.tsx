@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircle2, AlertTriangle, Flame, HelpCircle } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, HelpCircle } from "lucide-react";
 import { GlucoseChart } from "./glucose-chart";
 import { formatINR, cn } from "@/lib/utils";
 
@@ -24,120 +25,117 @@ export interface ScoredItem {
   } | null;
 }
 
-const VERDICT_META = {
-  excellent: { color: "text-leaf", bg: "bg-leaf-pale", label: "Excellent fit", Icon: CheckCircle2 },
-  good: { color: "text-leaf", bg: "bg-leaf-pale/70", label: "Good fit", Icon: CheckCircle2 },
-  moderate: { color: "text-ember-text", bg: "bg-ember-soft/30", label: "Moderate", Icon: AlertTriangle },
-  poor: { color: "text-ember-text", bg: "bg-ember-soft/40", label: "Avoid", Icon: AlertTriangle }
+const VERDICT = {
+  excellent: { dot: "bg-leaf", text: "text-leaf-text", label: "Excellent" },
+  good: { dot: "bg-leaf-soft", text: "text-leaf-text", label: "Good" },
+  moderate: { dot: "bg-ember-soft", text: "text-ember-text", label: "Moderate" },
+  poor: { dot: "bg-ember", text: "text-ember-text", label: "Avoid" }
 } as const;
 
+/**
+ * Compact by default: one scannable row per dish so several options can be
+ * compared at a glance, with the curve and macros one tap away. Rendering a
+ * full 100px chart per dish turned five results into an unreadable wall.
+ */
 export function DishCard({ item, rank }: { item: ScoredItem; rank?: number }) {
+  const [open, setOpen] = useState(false);
   const g = item.glycemic;
+  const v = g ? VERDICT[g.verdict] : null;
 
   return (
-    <div className="card p-5 animate-fade-up">
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div className="flex-1 min-w-0">
-          {rank !== undefined && (
-            <span className="mono text-ink-muted text-xs block mb-1">#{rank}</span>
-          )}
-          <h4 className="display text-xl leading-tight mb-1 break-words line-clamp-2">{item.name}</h4>
-          <p className="text-ink-muted text-sm">
-            {typeof item.price === "number" && item.price > 0
-              ? formatINR(item.price)
-              : "price unavailable"}
-            {item.is_veg !== undefined && (
+    <div className="card-solid overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-cream-deep/40 transition-colors"
+      >
+        {item.is_veg !== undefined && (
+          <span
+            className={cn(
+              "shrink-0 inline-flex items-center justify-center size-3.5 border",
+              item.is_veg ? "border-leaf-text" : "border-ember-text"
+            )}
+            aria-label={item.is_veg ? "vegetarian" : "non-vegetarian"}
+          >
+            <span className={cn("size-1.5 rounded-full", item.is_veg ? "bg-leaf-text" : "bg-ember-text")} />
+          </span>
+        )}
+
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium leading-snug break-words line-clamp-2">
+            {rank !== undefined && <span className="text-ink-muted mr-1.5">{rank}.</span>}
+            {item.name}
+          </span>
+          <span className="block text-xs text-ink-muted mt-0.5">
+            {typeof item.price === "number" && item.price > 0 ? formatINR(item.price) : "price unavailable"}
+            {g && (
               <>
                 {" · "}
-                <span
-                  className={cn(
-                    "inline-block size-2.5 border align-middle mr-1",
-                    item.is_veg ? "border-leaf-text" : "border-ember-text"
-                  )}
-                  aria-hidden
-                >
-                  <span
-                    className={cn(
-                      "block size-1.5 rounded-full m-[1px]",
-                      item.is_veg ? "bg-leaf-text" : "bg-ember-text"
-                    )}
-                  />
-                </span>
-                {item.is_veg ? "veg" : "non-veg"}
+                {g.calories} kcal · {g.carbs_g}g carbs
               </>
             )}
-          </p>
-        </div>
+          </span>
+        </span>
 
         {g ? (
-          <div
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium shrink-0",
-              VERDICT_META[g.verdict].bg,
-              VERDICT_META[g.verdict].color
-            )}
-          >
-            {(() => {
-              const Icon = VERDICT_META[g.verdict].Icon;
-              return <Icon size={12} />;
-            })()}
-            {VERDICT_META[g.verdict].label}
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-ink/5 text-ink-muted shrink-0">
-            <HelpCircle size={12} />
-            Not scored
-          </div>
-        )}
-      </div>
-
-      {g ? (
-        <>
-          <div className="grid grid-cols-4 gap-2 mb-4 text-center">
-            <Stat label="kcal" value={g.calories} />
-            <Stat label="carbs" value={`${g.carbs_g}g`} />
-            <Stat label="protein" value={`${g.protein_g}g`} />
-            <Stat label="fiber" value={`${g.fiber_g}g`} />
-          </div>
-
-          <div className="bg-ink/[0.025] rounded-xl p-3 mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <span className="mono text-ink-muted text-xs">estimated glucose · 3hr</span>
-              <span className="mono text-ink text-[0.8125rem] font-medium">
-                peak {g.predicted_peak_mg_dl} mg/dL
-              </span>
-            </div>
-            <GlucoseChart curve={g.curve} peak={g.predicted_peak_mg_dl} height={100} />
-          </div>
-
-          <div className="flex gap-2 items-start text-xs text-ink-soft leading-relaxed">
-            <Flame size={12} className="text-leaf mt-0.5 flex-shrink-0" />
-            <span>
-              {g.estimate_basis}
-              {g.estimate_confidence === "archetype" && (
-                <span className="text-ink-muted"> — category average, may differ from this kitchen's recipe</span>
-              )}
+          <span className="shrink-0 text-right">
+            <span className="flex items-center gap-1.5 justify-end">
+              <span className={cn("size-2 rounded-full", v!.dot)} />
+              <span className="text-sm font-medium tabular-nums">{g.predicted_peak_mg_dl}</span>
             </span>
-          </div>
+            <span className={cn("block text-xs", v!.text)}>{v!.label}</span>
+          </span>
+        ) : (
+          <span className="shrink-0 inline-flex items-center gap-1 text-xs text-ink-muted">
+            <HelpCircle size={13} /> not scored
+          </span>
+        )}
 
-          <div className="mt-4 pt-3 border-t border-ink/8 flex items-center justify-between">
-            <span className="mono text-ink-muted text-xs">match score</span>
-            <div className="flex items-center gap-2">
-              <div className="w-20 h-1.5 rounded-full bg-ink/8 overflow-hidden">
-                <div
-                  className="h-full bg-leaf transition-all"
-                  style={{ width: `${Math.max(0, Math.min(100, g.match_score))}%` }}
-                />
+        <ChevronDown
+          size={15}
+          className={cn("shrink-0 text-ink-muted transition-transform", open && "rotate-180")}
+        />
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 pt-1 border-t border-ink/8">
+          {g ? (
+            <>
+              <div className="grid grid-cols-4 gap-2 my-3 text-center">
+                <Stat label="kcal" value={g.calories} />
+                <Stat label="carbs" value={`${g.carbs_g}g`} />
+                <Stat label="protein" value={`${g.protein_g}g`} />
+                <Stat label="fiber" value={`${g.fiber_g}g`} />
               </div>
-              <span className="font-mono text-sm font-medium">{g.match_score}/100</span>
-            </div>
-          </div>
-        </>
-      ) : (
-        <p className="text-xs text-ink-muted leading-relaxed">
-          We couldn&apos;t recognise this dish well enough to estimate its glucose impact,
-          so we&apos;re not guessing. Treat it as unknown.
-        </p>
+
+              <div className="bg-cream rounded-xl p-3 mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="mono text-ink-muted text-xs">estimated glucose · 3hr</span>
+                  <span className="mono text-ink text-[0.8125rem] font-medium">
+                    peak {g.predicted_peak_mg_dl} mg/dL
+                  </span>
+                </div>
+                <GlucoseChart curve={g.curve} peak={g.predicted_peak_mg_dl} height={96} />
+              </div>
+
+              <p className="text-xs text-ink-soft leading-relaxed">
+                {g.estimate_basis}
+                {g.estimate_confidence === "archetype" && (
+                  <span className="text-ink-muted">
+                    {" "}
+                    — a category average, so it may differ from this kitchen&apos;s recipe.
+                  </span>
+                )}
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-ink-muted leading-relaxed pt-3">
+              We couldn&apos;t recognise this dish well enough to estimate its glucose impact,
+              so we&apos;re not guessing. Treat it as unknown.
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUid } from "@/lib/session";
 import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
-import { callSwiggyRaw } from "@/lib/swiggy-tools";
+import { callSwiggyRaw, unwrapSwiggy } from "@/lib/swiggy-tools";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,10 +26,13 @@ export async function GET() {
 
   try {
     const addrRes = await callSwiggyRaw(client, "get_addresses", {});
-    const addresses = (addrRes?.data?.addresses ?? []).map((a: any) => ({
+    const addresses = (unwrapSwiggy(addrRes)?.addresses ?? []).map((a: any) => ({
       id: a.id,
       addressLine: a.addressLine,
-      tag: a.addressTag ?? a.addressCategory ?? null
+      // Users label these freely — one real account has an address categorised
+      // "Other" but tagged "Home". Keep both so the list is disambiguable.
+      tag: a.addressTag ?? null,
+      category: a.addressCategory ?? null
     }));
 
     let frequentItems: string[] = [];
@@ -38,7 +41,7 @@ export async function GET() {
     if (addresses[0]?.id) {
       try {
         const ordersRes = await callSwiggyRaw(client, "get_food_orders", { addressId: addresses[0].id });
-        const orders = ordersRes?.data?.orders ?? [];
+        const orders = unwrapSwiggy(ordersRes)?.orders ?? [];
         frequentItems = rank(orders.flatMap((o: any) => splitItems(o.orderedItems)));
         frequentRestaurants = rank(orders.map((o: any) => o.restaurantName).filter(Boolean));
       } catch (err) {

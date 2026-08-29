@@ -26,6 +26,23 @@ assert.ok(gulab.gi >= 70, "dessert should be high GI");
 const combo = estimateNutrition("Chef's Special", "deep fried crispy chicken");
 assert.ok(combo, "should fall back to description keywords");
 
+// REGRESSION — the dangerous one. "Barbeque Chicken Pizza" used to match
+// "Chicken Tikka" on the shared word "chicken", reporting a high-carb pizza as
+// 4g carbs with no glucose rise. The dish TYPE must win over a shared topping.
+const bbqPizza = estimateNutrition("Barbeque Chicken Pizza");
+assert.ok(bbqPizza, "pizza should still estimate");
+assert.ok(
+  bbqPizza.carbs > 40,
+  `pizza must be treated as high-carb, got ${bbqPizza.carbs}g (chicken-tikka mismatch has returned)`
+);
+for (const name of ["Chicken Burger", "Paneer Roll", "Chicken Hakka Noodles", "Egg Sandwich"]) {
+  const e = estimateNutrition(name);
+  assert.ok(e && e.carbs > 30, `${name} should be scored as a carb-bearing dish, got ${e?.carbs}g`);
+}
+// ...while genuinely low-carb grilled dishes stay low-carb.
+const tikka = estimateNutrition("Chicken Tikka");
+assert.ok(tikka && tikka.carbs < 15, `Chicken Tikka should stay low-carb, got ${tikka?.carbs}g`);
+
 // The critical case: unknown dishes must return null, never invented numbers.
 assert.equal(estimateNutrition("Zorbian Flarn Platter"), null);
 assert.equal(estimateNutrition(""), null);

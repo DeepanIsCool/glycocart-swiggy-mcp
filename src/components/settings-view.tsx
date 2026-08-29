@@ -9,6 +9,7 @@ interface Address {
   id: string;
   addressLine: string;
   tag: string | null;
+  category: string | null;
 }
 
 export function SettingsView({
@@ -120,7 +121,11 @@ export function SettingsView({
             >
               <MapPin size={15} className="text-ink-muted mt-0.5 shrink-0" />
               <span className="min-w-0 flex-1">
-                {addr.tag && <span className="mono text-ink-muted text-xs block mb-0.5">{addr.tag}</span>}
+                {(addr.tag || addr.category) && (
+                  <span className="mono text-ink-muted text-xs block mb-0.5">
+                    {[addr.tag, addr.category].filter(Boolean).join(" · ")}
+                  </span>
+                )}
                 <span className="block text-sm line-clamp-2">{addr.addressLine}</span>
               </span>
               {selected === addr.id && <Check size={16} className="text-leaf-text shrink-0 mt-0.5" />}

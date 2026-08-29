@@ -48,27 +48,44 @@ export async function getSwiggyClient(): Promise<Client | null> {
 }
 
 /**
- * Resolve a stable, pseudonymous user id for the freshly-authenticated Swiggy
- * account by hashing the phone number on their saved address. We never store
- * the number itself — only the salted hash — so the profile row holds no
- * directly identifying data.
+ * Resolve a stable, pseudonymous user id for the authenticated Swiggy account.
  *
- * Falls back to a random id when the account has no saved address (that user
- * cannot search Swiggy anyway until they add one; their profile still saves,
- * it just won't follow them to another device).
+ * The obvious key — the phone number on a saved address — does NOT work, and a
+ * real account proved why: Swiggy masks the number (`****4257`) and returns a
+ * DIFFERENT one per address, because addresses saved for friends carry their
+ * number. Keying off `addresses[0]` would tie a profile to whichever address
+ * happened to sort first, and lose it whenever that changed.
+ *
+ * Instead: prefer the `sub` claim of the OAuth access token, which is the
+ * account identifier the authorization server itself issued. If the token
+ * isn't a JWT, fall back to an id we mint and keep in our own session cookie —
+ * stable per browser, which is honest about what we can actually guarantee.
  */
-export async function resolveUidFromSwiggy(client: Client): Promise<string> {
-  try {
-    const res = await client.callTool({ name: "get_addresses", arguments: {} });
-    const first = (res.content as { type?: string; text?: string }[] | undefined)?.[0];
-    const parsed =
-      (res.structuredContent as any) ??
-      (first?.type === "text" && first.text ? JSON.parse(first.text) : undefined);
+export async function resolveUid(existingUid: string | null): Promise<string> {
+  if (existingUid) return existingUid;
 
-    const phone = parsed?.data?.addresses?.[0]?.phoneNumber;
-    if (typeof phone === "string" && phone.trim()) return deriveUid(phone.trim());
+  try {
+    const provider = new CookieOAuthProvider(SWIGGY_REDIRECT_URI);
+    const tokens = await provider.tokens();
+    const sub = subjectFromJwt(tokens?.access_token);
+    if (sub) return deriveUid(sub);
   } catch (err) {
-    console.error("Could not resolve Swiggy identity from addresses", err);
+    console.error("Could not read subject from access token", err);
   }
+
   return randomUUID();
+}
+
+/** Reads the `sub` claim without verifying — the token came from our own OAuth exchange. */
+function subjectFromJwt(token: string | undefined): string | null {
+  if (!token) return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    const sub = payload?.sub ?? payload?.user_id ?? payload?.userId;
+    return typeof sub === "string" && sub.trim() ? sub.trim() : null;
+  } catch {
+    return null;
+  }
 }

@@ -81,8 +81,8 @@ export async function POST(req: Request) {
   const tools = buildToolset(profile, swiggyClient);
   const systemPrompt = buildSystemPrompt(profile);
   
-  const defaultModel = useNvidia 
-    ? "meta/llama-3.1-70b-instruct" 
+  const defaultModel = useNvidia
+    ? (process.env.NVIDIA_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b")
     : (process.env.OPENROUTER_MODEL ?? "anthropic/claude-3.5-sonnet");
   const modelChoice = customModel || defaultModel;
   
@@ -100,10 +100,45 @@ export async function POST(req: Request) {
   return result.toDataStreamResponse({
     getErrorMessage: (error: unknown) => {
       console.error("=== CHAT STREAM ERROR ===", error);
-      if (error instanceof Error) return error.message;
-      return String(error);
+      return describeError(error);
     }
   });
+}
+
+/**
+ * Providers throw plain objects as often as Errors, and `String(obj)` renders
+ * "[object Object]" in the chat — which is what the user actually saw for an
+ * NVIDIA 503. Pull out something readable, and translate the transient cases
+ * into advice rather than jargon.
+ */
+function describeError(error: unknown): string {
+  if (typeof error === "string") return error;
+
+  const e = error as any;
+  const raw =
+    e?.message ??
+    e?.error?.message ??
+    e?.responseBody ??
+    (error instanceof Error ? error.message : undefined);
+
+  const status = e?.statusCode ?? e?.code ?? e?.status;
+
+  if (status === 503 || /overload|unavailable|capacity/i.test(String(raw))) {
+    return "The AI provider is overloaded right now. Wait a few seconds and send that again.";
+  }
+  if (status === 429 || /rate.?limit/i.test(String(raw))) {
+    return "Rate limited by the AI provider. Give it a moment and try again.";
+  }
+  if (status === 401 || status === 403) {
+    return "The AI provider rejected the API key. Check it in Settings.";
+  }
+
+  if (typeof raw === "string" && raw.trim()) return raw;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Something went wrong talking to the AI provider.";
+  }
 }
 
 const TOOL_INSTRUCTIONS = `TOOL USE PATTERN:
@@ -167,5 +202,12 @@ CRITICAL CONSTRAINTS:
 
 ${TOOL_INSTRUCTIONS}
 
-Keep responses tight. Use bullet points for dish lists. Show numbers (calories, predicted peak mg/dL).`;
+OUTPUT FORMAT — the UI renders your text as PLAIN TEXT, not markdown:
+- Never use markdown tables, ** bold **, or # headings. They render as literal
+  pipes and asterisks and look broken.
+- The dish cards shown above your message already list name, price, calories,
+  carbs and predicted peak. Do NOT repeat that data in a table.
+- Instead write 2-4 short sentences: which option you'd pick, why it suits this
+  user's profile, and any caveat. Reference dishes by name.
+- Keep it under 80 words unless the user asks for detail.`;
 }

@@ -96,10 +96,28 @@ const ARCHETYPES: { keywords: string[]; label: string; macros: Omit<NutritionEst
     label: "noodle / pasta",
     macros: { calories: 520, carbs: 72, protein: 16, fat: 18, fiber: 4, gi: 55, gl: 39.6 }
   },
+  // Split out because a single "bread-wrapped fast food" bucket made a pizza, a
+  // sandwich and a burger return byte-identical macros, which looks fabricated
+  // and gives the user nothing to choose between.
   {
-    keywords: ["pizza", "burger", "sandwich", "roll", "wrap", "frankie"],
-    label: "bread-wrapped fast food",
-    macros: { calories: 560, carbs: 62, protein: 20, fat: 26, fiber: 3, gi: 62, gl: 38.4 }
+    keywords: ["pizza"],
+    label: "pizza",
+    macros: { calories: 680, carbs: 76, protein: 26, fat: 28, fiber: 4, gi: 60, gl: 45.6 }
+  },
+  {
+    keywords: ["burger", "whopper", "patty"],
+    label: "burger",
+    macros: { calories: 520, carbs: 44, protein: 24, fat: 26, fiber: 3, gi: 61, gl: 26.8 }
+  },
+  {
+    keywords: ["sandwich", "sub ", "panini"],
+    label: "sandwich",
+    macros: { calories: 380, carbs: 42, protein: 16, fat: 14, fiber: 4, gi: 56, gl: 23.5 }
+  },
+  {
+    keywords: ["roll", "wrap", "frankie", "shawarma"],
+    label: "roll / wrap",
+    macros: { calories: 450, carbs: 48, protein: 20, fat: 20, fiber: 3, gi: 58, gl: 27.8 }
   },
   {
     keywords: ["fries", "samosa", "pakora", "pakoda", "bhaji", "fried", "crispy", "manchurian"],
@@ -168,23 +186,56 @@ export function estimateNutrition(name: string, description = ""): NutritionEsti
   if (!n) return null;
   const haystack = `${n} ${normalize(description)}`;
 
-  // 1. Known dish from the composition-table catalog — strongest signal.
+  // 1. Known dish from the composition-table catalog — strongest signal, but
+  //    only when the dish TYPE agrees.
+  //
+  //    Word overlap alone is not enough and was actively dangerous: "Barbeque
+  //    Chicken Pizza" scored 0.5 against "Chicken Tikka" on the shared word
+  //    "chicken", so a ~70g-carb pizza was reported as 4g of carbs with no
+  //    glucose rise. In Indian menu names the dish type is the head noun at the
+  //    end ("... Pizza", "... Tikka", "... Biryani"), so the catalog entry's own
+  //    head noun must appear in the name before we trust the match.
+  const headNoun = (name: string) => {
+    const words = name.split(" ").filter((w) => w.length > 3);
+    return words[words.length - 1];
+  };
+
   let best: { dish: Dish; score: number } | null = null;
   for (const dish of CATALOG) {
     const dishName = normalize(dish.name);
     const dishWords = dishName.split(" ").filter((w) => w.length > 3);
     if (!dishWords.length) continue;
+
+    const head = headNoun(dishName);
+    if (head && !n.includes(head)) continue; // different kind of dish
+
     const hits = dishWords.filter((w) => n.includes(w)).length;
     const score = hits / dishWords.length;
     if (score >= 0.5 && (!best || score > best.score)) best = { dish, score };
   }
-  if (best) return toEstimate(best.dish, "matched", `composition table match: ${best.dish.name}`);
 
-  // 2. Archetype fallback — category average, explicitly weaker.
+  // 2. Archetype by head noun — a keyword late in the name describes the dish
+  //    itself ("chicken PIZZA"), while an early one is usually a topping.
+  let arch: { a: (typeof ARCHETYPES)[number]; at: number } | null = null;
   for (const a of ARCHETYPES) {
-    if (a.keywords.some((k) => haystack.includes(k))) {
-      return { ...a.macros, confidence: "archetype", basis: `category estimate: ${a.label}` };
+    for (const k of a.keywords) {
+      const at = haystack.lastIndexOf(k);
+      if (at >= 0 && (!arch || at > arch.at)) arch = { a, at };
     }
+  }
+
+  // A later, more specific archetype keyword beats a loose catalog match.
+  if (best && arch) {
+    const catalogHead = headNoun(normalize(best.dish.name));
+    const catalogAt = catalogHead ? n.lastIndexOf(catalogHead) : -1;
+    if (arch.at > catalogAt) {
+      return { ...arch.a.macros, confidence: "archetype", basis: `category estimate: ${arch.a.label}` };
+    }
+  }
+
+  if (best) return toEstimate(best.dish, "matched", `composition table match: ${best.dish.name}`);
+  if (arch) {
+    return { ...arch.a.macros, confidence: "archetype", basis: `category estimate: ${arch.a.label}` };
   }
 
   return null;

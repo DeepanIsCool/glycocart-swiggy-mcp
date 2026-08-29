@@ -20,6 +20,9 @@ export interface ProfileView {
   fastingBaseline: number;
 }
 
+/** Mirrors the server-side default in /api/chat so the UI names what's actually running. */
+const DEFAULT_MODEL_LABEL = "nemotron-3-ultra-550b (default)";
+
 const SUGGESTED_PROMPTS = [
   "What's the best lunch I can order near me right now?",
   "Find biryani near me and tell me which won't spike me",
@@ -420,7 +423,11 @@ function ModelCombobox({
         onClick={() => setOpen(!open)}
       >
         <div className="flex-1 truncate">
-          {isLoading ? "Loading models…" : selectedModel ? selectedModel.name : value || "Default model"}
+          {isLoading
+            ? "Loading models…"
+            : selectedModel
+              ? selectedModel.name
+              : value || DEFAULT_MODEL_LABEL}
         </div>
         <ChevronDown size={14} className="text-ink-muted shrink-0" />
       </div>
