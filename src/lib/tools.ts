@@ -2,6 +2,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import type { UserProfile } from "./profile";
 import { buildSwiggyTools } from "./swiggy-tools";
 import { buildCartTools } from "./cart-tools";
+import { buildInstamartTools } from "./instamart-tools";
 
 /**
  * The agent's toolset. Every user is signed in to their own Swiggy account,
@@ -9,10 +10,17 @@ import { buildCartTools } from "./cart-tools";
  * server. There is deliberately no mock fallback — a user managing PCOS or
  * diabetes must never be shown invented restaurants as if they were real.
  */
-export function buildToolset(profile: UserProfile, swiggyClient: Client) {
+export function buildToolset(
+  profile: UserProfile,
+  swiggyClient: Client,
+  instamartClient?: Client | null
+) {
   return {
     ...buildSwiggyTools(swiggyClient, profile),
-    ...buildCartTools(swiggyClient, profile)
+    ...buildCartTools(swiggyClient, profile),
+    // Groceries are optional: if Instamart is unreachable the agent simply
+    // doesn't get those tools rather than the whole chat failing.
+    ...(instamartClient ? buildInstamartTools(instamartClient, profile) : {})
   };
 }
 

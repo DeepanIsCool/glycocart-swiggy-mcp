@@ -27,6 +27,15 @@ export function resolveDatabaseUrl(): string | undefined {
   );
 }
 
+export function sqlClient() {
+  return client();
+}
+
+/** Ensure tables exist before another module queries them directly. */
+export async function ensureSchemaReady() {
+  await ensureSchema();
+}
+
 function client() {
   const url = resolveDatabaseUrl();
   if (!url) {
@@ -48,6 +57,36 @@ async function ensureSchema() {
       updated_at  timestamptz not null default now()
     )
   `;
+  await sql`
+    create table if not exists chat_sessions (
+      id          text primary key,
+      user_id     text not null,
+      title       text not null,
+      created_at  timestamptz not null default now(),
+      updated_at  timestamptz not null default now()
+    )
+  `;
+  await sql`create index if not exists chat_sessions_user_idx on chat_sessions (user_id, updated_at desc)`;
+  await sql`
+    create table if not exists chat_messages (
+      id                bigserial primary key,
+      session_id        text not null references chat_sessions(id) on delete cascade,
+      role              text not null,
+      content           text,
+      tool_invocations  jsonb,
+      created_at        timestamptz not null default now()
+    )
+  `;
+  await sql`create index if not exists chat_messages_session_idx on chat_messages (session_id, id)`;
+  await sql`
+    create table if not exists daily_log (
+      user_id     text not null,
+      day         date not null,
+      entries     jsonb not null default '[]'::jsonb,
+      updated_at  timestamptz not null default now(),
+      primary key (user_id, day)
+    )
+  `;
   initialised = true;
 }
 
@@ -58,9 +97,16 @@ export async function getProfile(uid: string): Promise<UserProfile | null> {
   return rows[0]?.profile ?? null;
 }
 
+/**
+ * Right to erasure. Chat transcripts and the daily log are health-adjacent
+ * data too, so deleting "my data" must remove all of it, not just the profile.
+ * chat_messages cascades from chat_sessions.
+ */
 export async function deleteProfile(uid: string): Promise<void> {
   await ensureSchema();
   const sql = client();
+  await sql`delete from chat_sessions where user_id = ${uid}`;
+  await sql`delete from daily_log where user_id = ${uid}`;
   await sql`delete from user_profiles where id = ${uid}`;
 }
 

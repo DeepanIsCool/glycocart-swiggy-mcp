@@ -5,6 +5,7 @@ import { CookieOAuthProvider } from "./swiggy-oauth-provider";
 import { deriveUid } from "./crypto";
 
 export const SWIGGY_FOOD_MCP_URL = "https://mcp.swiggy.com/food";
+export const SWIGGY_INSTAMART_MCP_URL = "https://mcp.swiggy.com/instamart";
 
 export const SWIGGY_REDIRECT_URI = `${
   process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
@@ -23,12 +24,24 @@ export async function hasSwiggySession(): Promise<boolean> {
  * throw the user out of the chat over a real-integration hiccup.
  */
 export async function getSwiggyClient(): Promise<Client | null> {
+  return connectTo(SWIGGY_FOOD_MCP_URL);
+}
+
+/**
+ * Instamart is a separate MCP server behind the same OAuth session. Connect
+ * lazily and independently — a groceries outage must not break food search.
+ */
+export async function getInstamartClient(): Promise<Client | null> {
+  return connectTo(SWIGGY_INSTAMART_MCP_URL);
+}
+
+async function connectTo(serverUrl: string): Promise<Client | null> {
   const provider = new CookieOAuthProvider(SWIGGY_REDIRECT_URI);
   const tokens = await provider.tokens();
   if (!tokens) return null;
 
   const client = new Client({ name: "glycocart", version: "0.1.0" });
-  const transport = new StreamableHTTPClientTransport(new URL(SWIGGY_FOOD_MCP_URL), {
+  const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
     authProvider: provider,
     // Swiggy's auth-server metadata declares issuer "https://mcp.swiggy.com/auth" but is
     // discovered from "https://mcp.swiggy.com/food" (expected issuer "https://mcp.swiggy.com/") —

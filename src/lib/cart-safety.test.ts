@@ -22,10 +22,14 @@ const FORBIDDEN = [
   "check_payment_status"
 ];
 
-/** Find every string passed as an MCP tool name, i.e. callSwiggy*(client, "<name>", …). */
+/**
+ * Find every string passed as an MCP tool name. Covers BOTH servers: Food goes
+ * through callSwiggy/callSwiggyRaw, Instamart through callInstamart. Missing a
+ * call path here would silently un-gate that server.
+ */
 function calledToolNames(source: string): string[] {
   const names: string[] = [];
-  const re = /callSwiggy(?:Raw)?\s*\(\s*client\s*,\s*["'`]([^"'`]+)["'`]/g;
+  const re = /call(?:SwiggyRaw|Swiggy|Instamart)\s*\(\s*client\s*,\s*["'`]([^"'`]+)["'`]/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source))) names.push(m[1]);
   return names;
@@ -45,12 +49,18 @@ for (const { file, name } of called) {
   );
 }
 
-// The tools the agent is offered must not be named after checkout either.
-const toolsFile = readFileSync(join(LIB, "cart-tools.ts"), "utf8");
-for (const bad of FORBIDDEN) {
-  const registered = new RegExp(`^\\s*${bad}\\s*:\\s*tool\\(`, "m").test(toolsFile);
-  assert.ok(!registered, `cart-tools.ts registers a forbidden tool: ${bad}`);
+// The tools the agent is offered must not be named after checkout either —
+// checked across every tool-building module, not just the food cart.
+for (const file of ["cart-tools.ts", "instamart-tools.ts", "swiggy-tools.ts"]) {
+  const text = readFileSync(join(LIB, file), "utf8");
+  for (const bad of FORBIDDEN) {
+    assert.ok(
+      !new RegExp(`^\\s*${bad}\\s*:\\s*tool\\(`, "m").test(text),
+      `${file} registers a forbidden tool: ${bad}`
+    );
+  }
 }
+const toolsFile = readFileSync(join(LIB, "cart-tools.ts"), "utf8");
 
 // And the cart tools we DO expose must be present, or the feature is broken.
 for (const required of ["get_food_cart", "update_food_cart", "flush_food_cart"]) {

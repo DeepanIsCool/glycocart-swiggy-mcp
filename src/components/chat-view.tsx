@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { DishCard, type ScoredItem } from "./dish-card";
 import { ToolCallCard } from "./tool-call-card";
+import { ChatSidebar, ChatHistoryButton } from "./chat-sidebar";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 
@@ -44,6 +45,9 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [cartNotice, setCartNotice] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sessionsKey, setSessionsKey] = useState(0);
 
   /**
    * Add straight to the real Swiggy cart. The single-restaurant conflict is
@@ -84,10 +88,55 @@ export function ChatView({ profile }: { profile: ProfileView }) {
     }
   }
 
-  const { messages, input, handleInputChange, isLoading, append, setInput, error } = useChat({
-    api: "/api/chat",
-    body: { provider, customModel, customApiKey }
-  });
+  const { messages, input, handleInputChange, isLoading, append, setInput, error, setMessages } =
+    useChat({
+      api: "/api/chat",
+      body: { provider, customModel, customApiKey, sessionId }
+    });
+
+  /** Create the session lazily on first send, so empty chats never persist. */
+  async function ensureSession(firstMessage: string): Promise<string | null> {
+    if (sessionId) return sessionId;
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstMessage })
+      });
+      if (!res.ok) return null;
+      const { session } = await res.json();
+      setSessionId(session.id);
+      setSessionsKey((k) => k + 1);
+      return session.id;
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadSession(id: string) {
+    setSidebarOpen(false);
+    setSessionId(id);
+    try {
+      const res = await fetch(`/api/sessions/${id}`);
+      const { messages: stored } = await res.json();
+      setMessages(
+        (stored ?? []).map((m: any, i: number) => ({
+          id: `${id}-${i}`,
+          role: m.role,
+          content: m.content ?? ""
+        }))
+      );
+    } catch {
+      setMessages([]);
+    }
+  }
+
+  function newChat() {
+    setSidebarOpen(false);
+    setSessionId(null);
+    setMessages([]);
+    setCartNotice(null);
+  }
 
   const validateApiKey = () => {
     if (!customApiKey.trim()) return true;
@@ -102,17 +151,19 @@ export function ChatView({ profile }: { profile: ProfileView }) {
     return true;
   };
 
-  const handleChatSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleChatSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!validateApiKey()) return;
     const text = input.trim();
     if (!text) return;
     setInput("");
+    await ensureSession(text);
     append({ role: "user", content: text });
   };
 
-  const handleSuggestedPrompt = (p: string) => {
+  const handleSuggestedPrompt = async (p: string) => {
     if (!validateApiKey()) return;
+    await ensureSession(p);
     append({ role: "user", content: p });
   };
 
@@ -166,11 +217,22 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   const empty = messages.length === 0;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-1 min-h-0">
+      <ChatSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeId={sessionId}
+        onSelect={loadSession}
+        onNew={newChat}
+        refreshKey={sessionsKey}
+      />
+
+      <div className="flex flex-col flex-1 min-h-0">
       {/* Profile context bar */}
       <div className="px-5 md:px-10 py-4 bg-leaf-pale/40 border-b border-ink/8 relative z-20 shrink-0">
         <div className="max-w-3xl mx-auto flex items-center justify-between text-xs gap-4">
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <ChatHistoryButton onClick={() => setSidebarOpen(true)} />
             <ContextChip label="condition" value={profile.conditionLabel} />
             <ContextChip label="target" value={`${profile.dailyCalTarget} kcal/day`} />
             {profile.blocklist.length > 0 && (
@@ -358,6 +420,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
           live swiggy mcp · glucose figures are estimates · not medical advice
         </p>
       </form>
+      </div>
     </div>
   );
 }
