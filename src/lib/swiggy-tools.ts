@@ -12,6 +12,10 @@ import type { UserProfile } from "./profile";
  */
 
 /** Unwraps an MCP CallToolResult into the plain JSON Swiggy returns. */
+export async function callSwiggyRaw(client: Client, name: string, args: Record<string, unknown>) {
+  return callSwiggy(client, name, args);
+}
+
 async function callSwiggy(client: Client, name: string, args: Record<string, unknown>) {
   const res = await client.callTool({ name, arguments: args });
 

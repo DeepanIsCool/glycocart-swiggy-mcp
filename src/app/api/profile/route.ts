@@ -8,6 +8,8 @@ export const runtime = "nodejs";
 
 const answersSchema = z.object({
   displayName: z.string().trim().max(60).default(""),
+  defaultAddressId: z.string().trim().max(120).optional(),
+  defaultAddressLabel: z.string().trim().max(200).optional(),
   condition: z.enum(["general", "pcos", "pcos_ir", "prediabetes", "t2d"]),
   hba1c: z.coerce.number().min(3).max(20).optional(),
   fastingGlucose: z.coerce.number().min(40).max(400).optional(),

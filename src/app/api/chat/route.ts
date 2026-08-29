@@ -107,11 +107,13 @@ export async function POST(req: Request) {
 }
 
 const TOOL_INSTRUCTIONS = `TOOL USE PATTERN:
-1. ALWAYS call get_addresses FIRST. Every other tool needs an addressId from it.
-   Never invent, guess, or reuse a made-up addressId.
-2. If the user has several saved addresses, pick the one matching what they asked
-   for; if it's ambiguous, ask which one. If they have NO saved address, tell them
-   to add one in the Swiggy app — you cannot search without it.
+1. The user's default addressId is given in their profile above. USE IT DIRECTLY —
+   do not call get_addresses and do not ask the user where they are. They already
+   chose this during setup; asking again is a step backwards.
+   Only call get_addresses if the profile has no default address, or the user
+   explicitly asks to order somewhere else. Never invent an addressId.
+2. If they have NO saved address at all, tell them to add one in the Swiggy app —
+   search cannot work without one.
 3. "What should I eat / order me lunch" -> search_menu (it returns real dishes
    already scored for this user's glucose response).
 4. "Find me a restaurant" -> search_restaurants, then get_restaurant_menu.
@@ -137,6 +139,8 @@ function buildSystemPrompt(profile: UserProfile) {
 
 USER PROFILE:
 - Name: ${profile.displayName}
+- Default delivery addressId: ${profile.defaultAddressId ?? "NONE SAVED — call get_addresses"}
+- Delivers to: ${profile.defaultAddressLabel ?? "unknown"}
 - Condition: ${profile.conditionLabel}
 - Goal: ${profile.goal === "lose" ? "lose weight" : profile.goal === "gain" ? "gain weight" : "maintain weight"}
 - Dietary preferences: ${profile.dietary.join(", ") || "none stated"}

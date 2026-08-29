@@ -24,6 +24,9 @@ export const CONDITIONS: { id: ConditionId; label: string; blurb: string }[] = [
 
 export interface CalibrationAnswers {
   displayName: string;
+  /** Chosen from the user's real saved Swiggy addresses during onboarding. */
+  defaultAddressId?: string;
+  defaultAddressLabel?: string;
   condition: ConditionId;
   /** Optional lab values — strongest signal when present. */
   hba1c?: number;
@@ -56,6 +59,9 @@ export interface MetabolicProfile {
 export interface UserProfile {
   id: string;
   displayName: string;
+  /** Saves the agent from asking "which address?" on every single request. */
+  defaultAddressId?: string;
+  defaultAddressLabel?: string;
   condition: ConditionId;
   conditionLabel: string;
   goal: Goal;
@@ -186,6 +192,8 @@ export function buildUserProfile(id: string, a: CalibrationAnswers): UserProfile
   return {
     id,
     displayName: a.displayName.trim() || "there",
+    defaultAddressId: a.defaultAddressId,
+    defaultAddressLabel: a.defaultAddressLabel,
     condition: a.condition,
     conditionLabel: CONDITIONS.find((c) => c.id === a.condition)?.label ?? "Metabolic health",
     goal: a.goal,

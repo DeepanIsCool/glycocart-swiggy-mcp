@@ -1,24 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check, Loader2, Plus, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Loader2, MapPin, Plus, X } from "lucide-react";
 import { CONDITIONS, type CalibrationAnswers } from "@/lib/profile";
 import { cn } from "@/lib/utils";
 
 const DIETARY_OPTIONS = ["Vegetarian", "Vegan", "Eggetarian", "Jain", "No beef", "No pork", "High protein", "Low carb"];
 const COMMON_AVOIDS = ["Refined sugar", "White rice", "Maida", "Deep fried", "Sugary drinks", "Excess dairy"];
 
-const STEP_COUNT = 5;
+const STEP_COUNT = 6;
+
+interface SwiggyContext {
+  addresses: { id: string; addressLine: string; tag: string | null }[];
+  frequentItems: string[];
+  frequentRestaurants: string[];
+}
 
 export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAnswers> }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ctx, setCtx] = useState<SwiggyContext | null>(null);
+  const [ctxLoading, setCtxLoading] = useState(true);
 
   const [a, setA] = useState<CalibrationAnswers>({
     displayName: initial?.displayName ?? "",
+    defaultAddressId: initial?.defaultAddressId,
+    defaultAddressLabel: initial?.defaultAddressLabel,
     condition: initial?.condition ?? "general",
     hba1c: initial?.hba1c,
     fastingGlucose: initial?.fastingGlucose,
@@ -37,6 +47,42 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
 
   const set = <K extends keyof CalibrationAnswers>(k: K, v: CalibrationAnswers[K]) =>
     setA((prev) => ({ ...prev, [k]: v }));
+
+  // Pull what Swiggy already knows so we don't ask for it: saved addresses, and
+  // dishes they actually order (offered as suggestions, never auto-applied).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/swiggy/context");
+        if (!res.ok) throw new Error("context unavailable");
+        const data: SwiggyContext = await res.json();
+        if (cancelled) return;
+        setCtx(data);
+        // Single saved address is not a choice worth making them make.
+        if (data.addresses.length === 1) {
+          setA((prev) =>
+            prev.defaultAddressId
+              ? prev
+              : { ...prev, defaultAddressId: data.addresses[0].id, defaultAddressLabel: data.addresses[0].addressLine }
+          );
+        }
+      } catch {
+        if (!cancelled) setCtx({ addresses: [], frequentItems: [], frequentRestaurants: [] });
+      } finally {
+        if (!cancelled) setCtxLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggleList = (k: "triggers" | "safeFoods", value: string) =>
+    setA((prev) => ({
+      ...prev,
+      [k]: prev[k].includes(value) ? prev[k].filter((x) => x !== value) : [...prev[k], value]
+    }));
 
   const toggle = (k: "dietary" | "blocklist", value: string) =>
     setA((prev) => ({
@@ -121,6 +167,56 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
 
       {step === 1 && (
         <Section
+          title="Where should we look for food?"
+          sub="These are the addresses saved on your Swiggy account. Picking one now means we never have to interrupt you to ask later."
+        >
+          {ctxLoading && (
+            <div className="flex items-center gap-2 text-ink-muted text-sm">
+              <Loader2 size={14} className="animate-spin" /> Reading your saved addresses…
+            </div>
+          )}
+
+          {!ctxLoading && (ctx?.addresses.length ?? 0) === 0 && (
+            <div className="rounded-xl border border-ember/30 bg-ember-soft/20 p-4">
+              <p className="text-sm text-ink-soft leading-relaxed">
+                No saved addresses found on your Swiggy account. Add one in the Swiggy
+                app first — restaurant search needs a delivery address to work. You can
+                finish setting up here and add it after.
+              </p>
+            </div>
+          )}
+
+          <div className="grid gap-2">
+            {ctx?.addresses.map((addr) => (
+              <button
+                key={addr.id}
+                type="button"
+                onClick={() => {
+                  set("defaultAddressId", addr.id);
+                  set("defaultAddressLabel", addr.addressLine);
+                }}
+                className={cn(
+                  "text-left rounded-xl border px-4 py-3 transition-colors flex items-start gap-3",
+                  a.defaultAddressId === addr.id
+                    ? "border-leaf bg-leaf-pale/40"
+                    : "border-ink/10 bg-cream-warm hover:bg-cream-deep"
+                )}
+              >
+                <MapPin size={15} className="text-ink-muted mt-0.5 shrink-0" />
+                <span className="min-w-0">
+                  {addr.tag && (
+                    <span className="mono text-ink-muted text-[0.6rem] block mb-0.5">{addr.tag}</span>
+                  )}
+                  <span className="block text-sm">{addr.addressLine}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {step === 2 && (
+        <Section
           title="Do you know any recent numbers?"
           sub="Optional — but they replace our estimates with your actual values. Skip if you don't have them to hand."
         >
@@ -147,7 +243,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
         </Section>
       )}
 
-      {step === 2 && (
+      {step === 3 && (
         <Section
           title="How does your body usually behave?"
           sub="This shapes how sharply we expect carbs to hit you."
@@ -186,7 +282,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
         </Section>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <Section
           title="A few body basics"
           sub="Only used to set a daily calorie target. Skip and we'll use a sensible default you can edit."
@@ -214,7 +310,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
         </Section>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <Section
           title="Food preferences"
           sub="What you eat, what you avoid, and anything you already know spikes you."
@@ -231,6 +327,51 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
             selected={a.blocklist}
             onToggle={(v) => toggle("blocklist", v)}
           />
+          {(ctx?.frequentItems.length ?? 0) > 0 && (
+            <div className="rounded-xl border border-ink/10 bg-cream-warm p-4">
+              <p className="mono text-ink-muted text-[0.65rem] mb-1">from your recent swiggy orders</p>
+              <p className="text-xs text-ink-muted mb-3 leading-relaxed">
+                Tap anything that reliably spikes you, or that always sits well. We
+                can&apos;t tell from an order how it affected your glucose — only you know that.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {ctx!.frequentItems.map((item) => {
+                  const isTrigger = a.triggers.includes(item);
+                  const isSafe = a.safeFoods.includes(item);
+                  return (
+                    <span key={item} className="inline-flex items-center rounded-full border border-ink/10 bg-cream overflow-hidden">
+                      <span className="px-3 py-1.5 text-sm">{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleList("safeFoods", item)}
+                        aria-pressed={isSafe}
+                        aria-label={`${item} sits well`}
+                        className={cn(
+                          "px-2.5 py-1.5 text-[0.65rem] mono border-l border-ink/10 transition-colors",
+                          isSafe ? "bg-leaf-pale text-leaf" : "text-ink-muted hover:bg-cream-deep"
+                        )}
+                      >
+                        ok
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleList("triggers", item)}
+                        aria-pressed={isTrigger}
+                        aria-label={`${item} spikes me`}
+                        className={cn(
+                          "px-2.5 py-1.5 text-[0.65rem] mono border-l border-ink/10 transition-colors",
+                          isTrigger ? "bg-ember-soft/40 text-ember" : "text-ink-muted hover:bg-cream-deep"
+                        )}
+                      >
+                        spikes
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <FreeList
             label="foods you know spike you"
             hint="e.g. white rice, chole bhature"
