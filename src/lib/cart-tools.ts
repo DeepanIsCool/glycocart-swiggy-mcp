@@ -91,8 +91,11 @@ export function buildCartTools(client: Client, profile: UserProfile) {
     get_food_cart: tool({
       description:
         "Get the user's current Swiggy cart with real pricing and the combined estimated glucose load. Call before suggesting changes so you know what's already in it.",
-      parameters: z.object({}),
-      execute: async () => shapeCart(await callSwiggyRaw(client, "get_food_cart", {}), profile)
+      parameters: z.object({
+        addressId: z.string().describe("required — delivery charges depend on it")
+      }),
+      execute: async ({ addressId }) =>
+        shapeCart(await callSwiggyRaw(client, "get_food_cart", { addressId }), profile)
     }),
 
     update_food_cart: tool({
@@ -101,7 +104,7 @@ export function buildCartTools(client: Client, profile: UserProfile) {
       parameters: z.object({
         restaurantId: z.string().describe("the restaurant these items belong to"),
         addressId: z.string().describe("from the user's profile or get_addresses"),
-        restaurantName: z.string().optional(),
+        restaurantName: z.string().describe("required — the cart guard compares by name, not id"),
         cartItems: z
           .array(
             z.object({
@@ -112,17 +115,27 @@ export function buildCartTools(client: Client, profile: UserProfile) {
           .min(1)
       }),
       execute: async ({ restaurantId, addressId, restaurantName, cartItems }) => {
-        // Guard the single-restaurant rule server-side rather than trusting the
-        // model to remember it — getting this wrong silently wipes the cart.
-        const current = unwrapSwiggy<any>(await callSwiggyRaw(client, "get_food_cart", {}));
-        const existingId = current?.restaurant?.id;
-        if (existingId && String(existingId) !== String(restaurantId) && (current?.items?.length ?? 0) > 0) {
+        // Guard the single-restaurant rule server-side. Swiggy silently WIPES the
+        // cart when you add from another restaurant — verified live — so this
+        // must be caught before the call, not reported after.
+        //
+        // Compare by NAME, not id: the cart response returns only
+        // { name, deliverySubtitle } with no restaurant id, so an id comparison
+        // silently never matched and the guard never fired.
+        const current = unwrapSwiggy<any>(await callSwiggyRaw(client, "get_food_cart", { addressId }));
+        const currentName: string | undefined = current?.restaurant?.name;
+        const hasItems = (current?.items?.length ?? 0) > 0;
+        const sameRestaurant =
+          !currentName ||
+          !restaurantName ||
+          currentName.trim().toLowerCase() === restaurantName.trim().toLowerCase();
+
+        if (hasItems && !sameRestaurant) {
           return {
             success: false,
             conflict: "different_restaurant",
-            current_restaurant: current?.restaurant?.name ?? existingId,
-            message:
-              "The cart already has items from a different restaurant. Swiggy carts hold one restaurant at a time. Ask the user whether to clear the cart and start this one, then call flush_food_cart before retrying."
+            current_restaurant: currentName,
+            message: `The cart already has items from ${currentName}. Swiggy carts hold one restaurant at a time, and adding from another silently empties it. Ask the user whether to discard that cart; only call flush_food_cart once they agree, then retry.`
           };
         }
 

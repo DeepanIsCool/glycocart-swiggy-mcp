@@ -19,19 +19,23 @@ async function context() {
   if (!profile) return { error: NextResponse.json({ error: "Finish onboarding first." }, { status: 403 }) };
   const client = await getSwiggyClient();
   if (!client) return { error: NextResponse.json({ error: "Swiggy session expired." }, { status: 401 }) };
-  return { tools: buildCartTools(client, profile) };
+  return { tools: buildCartTools(client, profile), profile };
 }
 
 export async function GET() {
   const ctx = await context();
   if (ctx.error) return ctx.error;
-  const cart = await ctx.tools!.get_food_cart.execute({}, { toolCallId: "ui", messages: [] });
+  const addressId = ctx.profile!.defaultAddressId;
+  if (!addressId) {
+    return NextResponse.json({ items: [], needsAddress: true });
+  }
+  const cart = await ctx.tools!.get_food_cart.execute({ addressId }, { toolCallId: "ui", messages: [] });
   return NextResponse.json(cart);
 }
 
 const addSchema = z.object({
   restaurantId: z.string().min(1),
-  restaurantName: z.string().optional(),
+  restaurantName: z.string().min(1),
   addressId: z.string().min(1),
   menuItemId: z.string().min(1),
   quantity: z.coerce.number().min(0).default(1)

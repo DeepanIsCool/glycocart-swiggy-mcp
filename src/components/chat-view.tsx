@@ -157,14 +157,17 @@ export function ChatView({ profile }: { profile: ProfileView }) {
     const text = input.trim();
     if (!text) return;
     setInput("");
-    await ensureSession(text);
-    append({ role: "user", content: text });
+    // Pass the id explicitly: setSessionId() won't have re-rendered before
+    // append() reads the hook body, so a fresh session would post sessionId=null
+    // and the transcript would never be saved.
+    const id = await ensureSession(text);
+    append({ role: "user", content: text }, { body: { sessionId: id } });
   };
 
   const handleSuggestedPrompt = async (p: string) => {
     if (!validateApiKey()) return;
-    await ensureSession(p);
-    append({ role: "user", content: p });
+    const id = await ensureSession(p);
+    append({ role: "user", content: p }, { body: { sessionId: id } });
   };
 
   useEffect(() => {

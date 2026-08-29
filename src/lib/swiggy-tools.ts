@@ -24,10 +24,17 @@ export async function callSwiggyRaw(client: Client, name: string, args: Record<s
  * response. Always go through this rather than reaching for `.data` directly.
  */
 export function unwrapSwiggy<T = any>(res: any): T {
-  if (res && typeof res === "object" && res.data && typeof res.data === "object") {
-    return res.data as T;
+  // Nesting depth is inconsistent per tool: search_menu returns the payload at
+  // the top level, update_food_cart wraps it once in `data`, and get_food_cart
+  // wraps it TWICE (data.data.cart_id). Unwrap while a `data` object exists,
+  // bounded so a pathological payload can't loop.
+  let cur = res;
+  for (let i = 0; i < 3; i++) {
+    if (cur && typeof cur === "object" && cur.data && typeof cur.data === "object" && !Array.isArray(cur.data)) {
+      cur = cur.data;
+    } else break;
   }
-  return res as T;
+  return cur as T;
 }
 
 async function callSwiggy(client: Client, name: string, args: Record<string, unknown>) {
