@@ -25,7 +25,7 @@ export default function LandingPage() {
           </a>
           <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-swiggy/30 bg-swiggy/10 px-3 py-1.5">
             <span className="size-1.5 rounded-full bg-swiggy" />
-            <span className="mono text-[0.65rem] text-swiggy">live on swiggy mcp</span>
+            <span className="mono text-xs text-swiggy-text">live on swiggy mcp</span>
           </span>
         </div>
       </header>
@@ -52,12 +52,12 @@ export default function LandingPage() {
             <div className="mt-7 flex flex-col gap-3 sm:flex-row md:flex-col">
               <a
                 href="/api/auth/swiggy/login"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-swiggy px-6 py-3.5 font-medium text-white transition-all hover:brightness-95 active:scale-[0.98]"
+                className="btn-swiggy"
               >
                 Sign in with Swiggy
                 <ArrowUpRight size={16} />
               </a>
-              <p className="mono text-ink-muted text-[0.65rem] self-center sm:self-start md:self-center">
+              <p className="mono text-ink-muted text-xs self-center sm:self-start md:self-center">
                 you&apos;ll need a swiggy account
               </p>
             </div>
@@ -105,7 +105,7 @@ export default function LandingPage() {
             text="A lifestyle tool, not a diagnostic one. Your Swiggy session is stored encrypted and never leaves the server. Talk to your clinician before changing how you manage your condition."
           />
         </div>
-        <p className="mono text-ink-muted text-[0.65rem] mt-8">
+        <p className="mono text-ink-muted text-xs mt-8">
           built by deepan sadhukhan · swiggy builders club
         </p>
       </section>
@@ -127,10 +127,10 @@ function Step({
   return (
     <div className="card p-6 animate-fade-up">
       <div className="flex items-center gap-3 mb-4">
-        <span className="inline-flex size-8 items-center justify-center rounded-full bg-swiggy/12 text-swiggy">
+        <span className="inline-flex size-8 items-center justify-center rounded-full bg-swiggy/12 text-swiggy-text">
           <Icon size={15} />
         </span>
-        <span className="mono text-ink-muted text-[0.65rem]">{n}</span>
+        <span className="mono text-ink-muted text-xs">{n}</span>
       </div>
       <h3 className="display text-xl mb-2">{title}</h3>
       <p className="text-sm text-ink-soft leading-relaxed">{body}</p>

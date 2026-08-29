@@ -6,6 +6,8 @@
 
 :root {
   --grain-opacity: 0.035;
+  /* Bottom tab bar height, including the iOS home-indicator inset. */
+  --nav-h: calc(4.25rem + env(safe-area-inset-bottom));
 }
 
 @layer base {
@@ -17,6 +19,8 @@
   body {
     @apply bg-cream text-ink font-sans;
     font-feature-settings: "ss01", "cv11";
+    /* Small UI text was reading thin; 400 is the floor, not 300. */
+    font-weight: 400;
   }
   ::selection {
     @apply bg-leaf/20 text-ink;
@@ -35,10 +39,28 @@
     mix-blend-mode: multiply;
   }
   .display { @apply font-display tracking-tight; }
-  .mono { @apply font-mono text-[0.78rem] uppercase tracking-[0.14em]; }
+  /* Fixed-height page that must not slide under the bottom tab bar. */
+  .app-main { height: calc(100dvh - var(--nav-h)); }
+  /* Scrolling page: reserve room so the last element clears the tab bar. */
+  .app-scroll { min-height: calc(100dvh - var(--nav-h)); padding-bottom: 1.5rem; }
+  /* 13px floor with looser-but-not-extreme tracking. The previous 0.14em on
+     uppercase micro-text measurably hurt legibility. */
+  .mono { @apply font-mono text-[0.8125rem] uppercase tracking-[0.08em]; }
   .card {
     @apply bg-cream-warm/60 border border-ink/10 rounded-2xl backdrop-blur-sm;
     box-shadow: 0 1px 0 rgba(15, 22, 20, 0.04), 0 8px 24px -12px rgba(15, 22, 20, 0.08);
+  }
+  /* Opaque variant for content that must stay legible over the grain overlay. */
+  .card-solid {
+    @apply bg-cream-warm border border-ink/10 rounded-2xl;
+    box-shadow: 0 1px 0 rgba(15, 22, 20, 0.04), 0 8px 24px -12px rgba(15, 22, 20, 0.08);
+  }
+  /* Brand-orange fill with dark text: keeps Swiggy's #FC8019 while clearing
+     WCAG AA at 7.2:1 (white on the same orange is only 2.16:1). */
+  .btn-swiggy {
+    @apply inline-flex items-center justify-center gap-2 bg-swiggy text-ink px-6 py-3.5
+    rounded-full font-medium transition-all hover:brightness-95 active:scale-[0.98]
+    disabled:opacity-50;
   }
   .btn-primary {
     @apply inline-flex items-center gap-2 bg-ink text-cream px-5 py-3 rounded-full font-medium

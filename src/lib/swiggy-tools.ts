@@ -34,7 +34,21 @@ async function callSwiggy(client: Client, name: string, args: Record<string, unk
   }
 
   if (res.isError) {
-    return { success: false, error: { message: parsed?.error?.message ?? parsed?.raw ?? `${name} failed` } };
+    const message = parsed?.error?.message ?? parsed?.raw ?? `${name} failed`;
+    // A saved addressId can be deleted in the Swiggy app after we stored it.
+    // Name that case so the agent re-fetches instead of retrying forever.
+    const staleAddress =
+      typeof message === "string" && /address/i.test(message) && /(not found|invalid|does not exist)/i.test(message);
+    return {
+      success: false,
+      error: { message },
+      ...(staleAddress
+        ? {
+            recovery:
+              "The saved delivery address is no longer on the user's Swiggy account. Call get_addresses, show the options, and ask them to pick one. Tell them they can make it permanent in Settings."
+          }
+        : {})
+    };
   }
   return parsed ?? { success: false, error: { message: `${name} returned no content` } };
 }
@@ -168,10 +182,30 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
           (a: any, b: any) => (b.glycemic?.match_score ?? -1) - (a.glycemic?.match_score ?? -1)
         );
 
+        const rated = scored.filter((i: any) => i.glycemic);
+        const allPoor =
+          rated.length > 0 && rated.every((i: any) => i.glycemic.verdict === "poor");
+        const vegOnly = profile.dietary.some((d) => /vegetarian|vegan|jain/i.test(d));
+        const dietConflicts = vegOnly
+          ? scored.filter((i: any) => i.is_veg === false).map((i: any) => i.name)
+          : [];
+
         return {
           items: scored,
           total: data?.totalItems,
           has_more: data?.hasMore,
+          ...(allPoor
+            ? {
+                all_poor_fit:
+                  "Every scored result here is a poor fit for this user. Say so plainly and suggest a different search rather than presenting the least-bad option as a good one."
+              }
+            : {}),
+          ...(dietConflicts.length
+            ? {
+                diet_conflicts: dietConflicts,
+                diet_note: `The user's stated diet (${profile.dietary.join(", ")}) rules these out. Do not recommend them.`
+              }
+            : {}),
           scoring_note:
             "Glucose forecasts are ESTIMATES from dish-name matching against Indian food composition tables — Swiggy does not publish per-dish nutrition. Say so when presenting them. Items with glycemic:null could not be estimated; do not invent numbers for them."
         };

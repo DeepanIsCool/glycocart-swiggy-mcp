@@ -21,7 +21,7 @@ export default async function OnboardingPage() {
       <header className="max-w-2xl mx-auto flex items-center gap-3 mb-10">
         <Image src="/glycocart_logo.png" alt="GlycoCart" width={36} height={36} className="rounded-full" />
         <span className="display text-lg font-medium">GlycoCart</span>
-        <span className="mono text-ink-muted text-[0.65rem] ml-auto">
+        <span className="mono text-ink-muted text-xs ml-auto">
           {existing ? "edit profile" : "step 1 of 2 · your profile"}
         </span>
       </header>

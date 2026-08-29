@@ -5,14 +5,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: { DEFAULT: "#0F1614", soft: "#1F2A26", muted: "#5C6B65" },
+        // Text tokens are contrast-checked against every cream background by
+        // `npm run test:contrast`. Fill variants keep the brand colour; `.text`
+        // variants are darkened so small type still clears WCAG AA — this app's
+        // users have elevated rates of diabetic vision impairment.
+        ink: { DEFAULT: "#0F1614", soft: "#1F2A26", muted: "#46524B" },
         cream: { DEFAULT: "#F8F5EF", warm: "#F2EDE2", deep: "#EAE2D2" },
-        leaf: { DEFAULT: "#0E7E5C", soft: "#7FB89F", pale: "#D8E8DF" },
-        ember: { DEFAULT: "#D9613A", soft: "#F2A684" },
+        leaf: { DEFAULT: "#0E7E5C", soft: "#7FB89F", pale: "#D8E8DF", text: "#0A6247" },
+        ember: { DEFAULT: "#D9613A", soft: "#F2A684", text: "#A83E1B" },
         sage: { DEFAULT: "#B7C4B3" },
         // Swiggy brand tokens — used where we're explicitly speaking as a
         // Swiggy MCP integration, not as GlycoCart's own editorial identity.
-        swiggy: { DEFAULT: "#FC8019", ink: "#282C3F", muted: "#686B78" }
+        swiggy: { DEFAULT: "#FC8019", ink: "#282C3F", muted: "#686B78", text: "#A04300" }
       },
       fontFamily: {
         display: ["Fraunces", "ui-serif", "Georgia", "serif"],

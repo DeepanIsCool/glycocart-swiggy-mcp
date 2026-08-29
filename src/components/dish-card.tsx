@@ -27,8 +27,8 @@ export interface ScoredItem {
 const VERDICT_META = {
   excellent: { color: "text-leaf", bg: "bg-leaf-pale", label: "Excellent fit", Icon: CheckCircle2 },
   good: { color: "text-leaf", bg: "bg-leaf-pale/70", label: "Good fit", Icon: CheckCircle2 },
-  moderate: { color: "text-ember", bg: "bg-ember-soft/30", label: "Moderate", Icon: AlertTriangle },
-  poor: { color: "text-ember", bg: "bg-ember-soft/40", label: "Avoid", Icon: AlertTriangle }
+  moderate: { color: "text-ember-text", bg: "bg-ember-soft/30", label: "Moderate", Icon: AlertTriangle },
+  poor: { color: "text-ember-text", bg: "bg-ember-soft/40", label: "Avoid", Icon: AlertTriangle }
 } as const;
 
 export function DishCard({ item, rank }: { item: ScoredItem; rank?: number }) {
@@ -39,12 +39,33 @@ export function DishCard({ item, rank }: { item: ScoredItem; rank?: number }) {
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="flex-1 min-w-0">
           {rank !== undefined && (
-            <span className="mono text-ink-muted text-[0.65rem] block mb-1">#{rank}</span>
+            <span className="mono text-ink-muted text-xs block mb-1">#{rank}</span>
           )}
-          <h4 className="display text-xl leading-tight mb-1">{item.name}</h4>
+          <h4 className="display text-xl leading-tight mb-1 break-words line-clamp-2">{item.name}</h4>
           <p className="text-ink-muted text-sm">
-            {item.price !== undefined ? formatINR(item.price) : "price unavailable"}
-            {item.is_veg !== undefined && <> · {item.is_veg ? "veg" : "non-veg"}</>}
+            {typeof item.price === "number" && item.price > 0
+              ? formatINR(item.price)
+              : "price unavailable"}
+            {item.is_veg !== undefined && (
+              <>
+                {" · "}
+                <span
+                  className={cn(
+                    "inline-block size-2.5 border align-middle mr-1",
+                    item.is_veg ? "border-leaf-text" : "border-ember-text"
+                  )}
+                  aria-hidden
+                >
+                  <span
+                    className={cn(
+                      "block size-1.5 rounded-full m-[1px]",
+                      item.is_veg ? "bg-leaf-text" : "bg-ember-text"
+                    )}
+                  />
+                </span>
+                {item.is_veg ? "veg" : "non-veg"}
+              </>
+            )}
           </p>
         </div>
 
@@ -81,8 +102,8 @@ export function DishCard({ item, rank }: { item: ScoredItem; rank?: number }) {
 
           <div className="bg-ink/[0.025] rounded-xl p-3 mb-3">
             <div className="flex items-center justify-between mb-1">
-              <span className="mono text-ink-muted text-[0.65rem]">estimated glucose · 3hr</span>
-              <span className="mono text-ink text-[0.7rem] font-medium">
+              <span className="mono text-ink-muted text-xs">estimated glucose · 3hr</span>
+              <span className="mono text-ink text-[0.8125rem] font-medium">
                 peak {g.predicted_peak_mg_dl} mg/dL
               </span>
             </div>
@@ -100,7 +121,7 @@ export function DishCard({ item, rank }: { item: ScoredItem; rank?: number }) {
           </div>
 
           <div className="mt-4 pt-3 border-t border-ink/8 flex items-center justify-between">
-            <span className="mono text-ink-muted text-[0.65rem]">match score</span>
+            <span className="mono text-ink-muted text-xs">match score</span>
             <div className="flex items-center gap-2">
               <div className="w-20 h-1.5 rounded-full bg-ink/8 overflow-hidden">
                 <div
@@ -126,7 +147,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="bg-cream py-2 rounded-lg">
       <div className="text-sm font-medium">{value}</div>
-      <div className="mono text-ink-muted text-[0.6rem]">{label}</div>
+      <div className="mono text-ink-muted text-xs">{label}</div>
     </div>
   );
 }

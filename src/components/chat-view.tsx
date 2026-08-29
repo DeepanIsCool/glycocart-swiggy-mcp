@@ -144,7 +144,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
 
         {showSettings && (
           <div className="max-w-3xl mx-auto mt-4 p-4 bg-cream-warm border border-ink/10 rounded-xl animate-fade-up">
-            <h4 className="mono text-ink text-[0.7rem] mb-3">AI Settings (optional)</h4>
+            <h4 className="mono text-ink text-[0.8125rem] mb-3">AI Settings (optional)</h4>
             <div className="flex flex-col gap-3 sm:flex-row">
               <select
                 value={provider}
@@ -196,7 +196,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-5 md:px-10 py-8 min-h-0 relative"
+        className="flex-1 overflow-y-auto px-5 md:px-10 pt-6 pb-4 min-h-0 relative"
       >
         <div className="max-w-3xl mx-auto space-y-5">
           {empty && <EmptyState profile={profile} />}
@@ -225,6 +225,16 @@ export function ChatView({ profile }: { profile: ProfileView }) {
                     <DishCard key={`${item.id ?? item.name}-${i}`} item={item} rank={i + 1} />
                   ))}
 
+                  {hasEmptyResult(m) && extractScoredItems(m).length === 0 && (
+                    <div className="card-solid p-5 text-sm text-ink-soft leading-relaxed">
+                      <p className="font-medium mb-1">No dishes matched that search.</p>
+                      <p className="text-ink-muted">
+                        Try a broader term (&ldquo;lunch&rdquo; rather than a specific dish), or
+                        check that your delivery address in Settings is the one you meant.
+                      </p>
+                    </div>
+                  )}
+
                   {m.content && (
                     <div className="bg-cream-warm/60 px-4 py-3 rounded-2xl rounded-bl-md max-w-[92%] text-sm leading-relaxed text-ink whitespace-pre-wrap">
                       {m.content}
@@ -238,7 +248,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
           {isLoading && messages[messages.length - 1]?.role === "user" && <ThinkingDots />}
 
           {error && (
-            <p className="text-sm text-ember">
+            <p className="text-sm text-ember-text">
               {error.message || "Something went wrong. Try again."}
             </p>
           )}
@@ -258,9 +268,9 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       )}
 
       {empty && (
-        <div className="px-5 md:px-10 pb-4">
+        <div className="px-5 md:px-10 pb-4 pt-2 border-t border-ink/5">
           <div className="max-w-3xl mx-auto">
-            <p className="mono text-ink-muted text-[0.65rem] mb-2">try one of these</p>
+            <p className="mono text-ink-muted text-xs mb-2">try one of these</p>
             <div className="flex gap-2 flex-wrap">
               {SUGGESTED_PROMPTS.map((p) => (
                 <button
@@ -289,7 +299,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
             <Send size={14} />
           </button>
         </div>
-        <p className="mono text-[0.6rem] text-ink-muted text-center mt-3">
+        <p className="mono text-xs text-ink-muted text-center mt-3">
           live swiggy mcp · glucose figures are estimates · not medical advice
         </p>
       </form>
@@ -300,7 +310,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
 function ContextChip({ label, value }: { label: string; value: string }) {
   return (
     <span className="inline-flex gap-1.5 items-baseline">
-      <span className="mono text-ink-muted text-[0.7rem]">{label}</span>
+      <span className="mono text-ink-muted text-[0.8125rem]">{label}</span>
       <span className="text-ink-soft">{value}</span>
     </span>
   );
@@ -308,20 +318,20 @@ function ContextChip({ label, value }: { label: string; value: string }) {
 
 function EmptyState({ profile }: { profile: ProfileView }) {
   return (
-    <div className="text-center py-12 animate-fade-up">
+    <div className="text-center py-6 sm:py-12 animate-fade-up">
       <Image
         src="/glycocart_logo.png"
         alt="GlycoCart"
-        width={80}
-        height={80}
-        className="mx-auto mb-6 rounded-full shadow-md"
+        width={64}
+        height={64}
+        className="mx-auto mb-4 rounded-full shadow-md"
       />
-      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-leaf-pale text-leaf text-xs mb-6">
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-leaf-pale text-leaf-text text-xs mb-4">
         <Sparkles size={12} />
         <span className="mono">live swiggy mcp · your account</span>
       </div>
-      <h2 className="display text-3xl mb-3">Hi {profile.displayName}.</h2>
-      <p className="text-ink-muted max-w-md mx-auto leading-relaxed">
+      <h2 className="display text-2xl sm:text-3xl mb-2">Hi {profile.displayName}.</h2>
+      <p className="text-ink-muted max-w-md mx-auto leading-relaxed text-sm sm:text-base">
         Your profile is loaded — baseline {profile.fastingBaseline} mg/dL. Ask me to find
         food near you and I&apos;ll estimate what each dish does to your glucose.
       </p>
@@ -339,22 +349,53 @@ function ThinkingDots() {
           style={{ animationDelay: `${d}ms` }}
         />
       ))}
-      <span className="mono text-[0.65rem] text-ink-muted ml-1">reasoning…</span>
+      <span className="mono text-xs text-ink-muted ml-1">reasoning…</span>
     </div>
   );
 }
 
-/** Pull the top scored dishes out of a search_menu tool result for card rendering. */
+/**
+ * Harvest dishes from tool results for card rendering.
+ *
+ * Unscoreable dishes are INCLUDED (sorted last). Previously they were filtered
+ * out, which silently hid real dishes Swiggy returned and made DishCard's
+ * "Not scored" state dead code — the opposite of being honest about what we
+ * can and can't estimate.
+ */
 function extractScoredItems(msg: any): ScoredItem[] {
   const out: ScoredItem[] = [];
   for (const t of msg.toolInvocations ?? []) {
-    if (t.state !== "result" || t.toolName !== "search_menu") continue;
-    const items = t.result?.items;
-    if (Array.isArray(items)) {
-      out.push(...items.filter((i: ScoredItem) => i?.glycemic).slice(0, 3));
+    if (t.state !== "result") continue;
+
+    if (t.toolName === "search_menu" && Array.isArray(t.result?.items)) {
+      out.push(...t.result.items);
+    }
+    // Restaurant menus carry the same scored shape and were never rendered.
+    if (t.toolName === "get_restaurant_menu" && Array.isArray(t.result?.categories)) {
+      for (const cat of t.result.categories) {
+        if (Array.isArray(cat?.items)) out.push(...cat.items);
+      }
     }
   }
-  return out;
+  const scored = out.filter((i) => i?.glycemic);
+  const unscored = out.filter((i) => i && !i.glycemic);
+  return [...scored, ...unscored].slice(0, 5);
+}
+
+/** True when a tool ran but the underlying Swiggy call reported failure. */
+function toolFailed(t: any) {
+  return t.state === "result" && t.result?.success === false;
+}
+
+/** A search ran and legitimately returned nothing — worth saying so explicitly. */
+function hasEmptyResult(msg: any): boolean {
+  for (const t of msg.toolInvocations ?? []) {
+    if (t.state !== "result" || toolFailed(t)) continue;
+    if (t.toolName === "search_menu" && Array.isArray(t.result?.items) && t.result.items.length === 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function ModelCombobox({
@@ -414,16 +455,16 @@ function ModelCombobox({
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-[0.7rem] truncate flex-1">{m.name}</span>
+                      <span className="font-medium text-[0.8125rem] truncate flex-1">{m.name}</span>
                       {isFree ? (
-                        <span className="text-[0.55rem] bg-leaf/10 text-leaf px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">Free</span>
+                        <span className="text-xs bg-leaf/10 text-leaf px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">Free</span>
                       ) : (
-                        <span className="text-[0.55rem] bg-ink/5 text-ink-soft px-1.5 py-0.5 rounded uppercase tracking-wider font-bold flex items-center gap-1">
+                        <span className="text-xs bg-ink/5 text-ink-soft px-1.5 py-0.5 rounded uppercase tracking-wider font-bold flex items-center gap-1">
                           Paid <Info size={9} className="opacity-60" />
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-[0.6rem] text-ink-muted font-mono leading-none">
+                    <div className="flex items-center gap-2 text-xs text-ink-muted font-mono leading-none">
                       <span className="truncate">{m.id}</span>
                       {ctxK && <span className="shrink-0 bg-ink/5 px-1 py-0.5 rounded">{ctxK}</span>}
                     </div>

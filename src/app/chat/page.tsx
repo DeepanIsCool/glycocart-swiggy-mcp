@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft } from "lucide-react";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { ChatView } from "@/components/chat-view";
+import { BottomNav } from "@/components/bottom-nav";
 
 export default async function ChatPage() {
   const uid = await getSessionUid();
@@ -24,33 +24,28 @@ export default async function ChatPage() {
   };
 
   return (
-    <main className="relative h-dvh flex flex-col overflow-hidden">
-      <header className="relative z-10 flex items-center justify-between px-5 md:px-10 py-5 border-b border-ink/10">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="btn-ghost">
-            <ArrowLeft size={16} /> home
-          </Link>
-          <Image
-            src="/glycocart_logo.png"
-            alt="GlycoCart"
-            width={32}
-            height={32}
-            className="rounded-full hidden sm:block"
-          />
-        </div>
-        <div className="text-center">
-          <p className="mono text-ink-muted text-[0.65rem]">signed in as</p>
-          <p className="display text-base">{profile.displayName}</p>
-        </div>
-        <div className="text-right">
-          <p className="mono text-ink-muted text-[0.65rem]">condition</p>
-          <Link href="/onboarding" className="text-sm font-medium hover:text-leaf transition-colors">
-            {profile.conditionLabel}
-          </Link>
-        </div>
+    <>
+    <main className="app-main relative flex flex-col overflow-hidden">
+      <header className="relative z-10 flex items-center gap-3 px-5 md:px-10 py-3.5 border-b border-ink/10 shrink-0">
+        <Image
+          src="/glycocart_logo.png"
+          alt=""
+          width={28}
+          height={28}
+          className="rounded-full"
+        />
+        <span className="display text-lg">GlycoCart</span>
+        <Link
+          href="/profile"
+          className="mono text-ink-muted text-xs ml-auto hover:text-ink transition-colors"
+        >
+          {profile.displayName}
+        </Link>
       </header>
 
       <ChatView profile={view} />
     </main>
+    <BottomNav />
+    </>
   );
 }

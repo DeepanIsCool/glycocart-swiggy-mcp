@@ -29,22 +29,22 @@ export function GlucoseChart({
           </defs>
           <XAxis
             dataKey="t"
-            tick={{ fontSize: 10, fill: "#5C6B65" }}
+            tick={{ fontSize: 12, fill: "#46524B" }}
             tickFormatter={(v) => `${v}m`}
             axisLine={false} tickLine={false}
             ticks={[0, 60, 120, 180]}
           />
           <YAxis
             domain={[80, 200]}
-            tick={{ fontSize: 10, fill: "#5C6B65" }}
+            tick={{ fontSize: 12, fill: "#46524B" }}
             axisLine={false} tickLine={false}
             width={28}
           />
-          <ReferenceLine y={140} stroke="#5C6B65" strokeDasharray="2 4" strokeOpacity={0.4} />
+          <ReferenceLine y={140} stroke="#46524B" strokeDasharray="2 4" strokeOpacity={0.4} />
           <Tooltip
             contentStyle={{
               background: "#0F1614", border: "none", borderRadius: 8,
-              fontSize: 11, color: "#F8F5EF", padding: "6px 10px"
+              fontSize: 12, color: "#F8F5EF", padding: "6px 10px"
             }}
             formatter={(v: number) => [`${v} mg/dL`, "glucose"]}
             labelFormatter={(v) => `+${v} min`}

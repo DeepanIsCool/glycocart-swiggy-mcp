@@ -58,6 +58,12 @@ export async function getProfile(uid: string): Promise<UserProfile | null> {
   return rows[0]?.profile ?? null;
 }
 
+export async function deleteProfile(uid: string): Promise<void> {
+  await ensureSchema();
+  const sql = client();
+  await sql`delete from user_profiles where id = ${uid}`;
+}
+
 export async function saveProfile(uid: string, profile: UserProfile): Promise<void> {
   await ensureSchema();
   const sql = client();

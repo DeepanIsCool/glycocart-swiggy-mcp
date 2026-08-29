@@ -143,7 +143,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
             className="w-full bg-cream-warm border border-ink/10 rounded-xl px-4 py-3 text-base outline-none focus:border-leaf"
           />
 
-          <p className="mono text-ink-muted text-[0.7rem] mt-8 mb-3">what are you managing?</p>
+          <p className="mono text-ink-muted text-[0.8125rem] mt-8 mb-3">what are you managing?</p>
           <div className="grid gap-2">
             {CONDITIONS.map((c) => (
               <button
@@ -205,7 +205,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
                 <MapPin size={15} className="text-ink-muted mt-0.5 shrink-0" />
                 <span className="min-w-0">
                   {addr.tag && (
-                    <span className="mono text-ink-muted text-[0.6rem] block mb-0.5">{addr.tag}</span>
+                    <span className="mono text-ink-muted text-xs block mb-0.5">{addr.tag}</span>
                   )}
                   <span className="block text-sm">{addr.addressLine}</span>
                 </span>
@@ -292,7 +292,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
             <NumberField label="Weight (kg)" value={a.weightKg} onChange={(v) => set("weightKg", v)} placeholder="62" />
             <NumberField label="Height (cm)" value={a.heightCm} onChange={(v) => set("heightCm", v)} placeholder="165" />
             <div>
-              <label className="mono text-ink-muted text-[0.65rem] block mb-1.5">sex</label>
+              <label className="mono text-ink-muted text-xs block mb-1.5">sex</label>
               <select
                 value={a.sex}
                 onChange={(e) => set("sex", e.target.value as CalibrationAnswers["sex"])}
@@ -329,7 +329,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
           />
           {(ctx?.frequentItems.length ?? 0) > 0 && (
             <div className="rounded-xl border border-ink/10 bg-cream-warm p-4">
-              <p className="mono text-ink-muted text-[0.65rem] mb-1">from your recent swiggy orders</p>
+              <p className="mono text-ink-muted text-xs mb-1">from your recent swiggy orders</p>
               <p className="text-xs text-ink-muted mb-3 leading-relaxed">
                 Tap anything that reliably spikes you, or that always sits well. We
                 can&apos;t tell from an order how it affected your glucose — only you know that.
@@ -347,7 +347,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
                         aria-pressed={isSafe}
                         aria-label={`${item} sits well`}
                         className={cn(
-                          "px-2.5 py-1.5 text-[0.65rem] mono border-l border-ink/10 transition-colors",
+                          "px-2.5 py-1.5 text-xs mono border-l border-ink/10 transition-colors",
                           isSafe ? "bg-leaf-pale text-leaf" : "text-ink-muted hover:bg-cream-deep"
                         )}
                       >
@@ -359,8 +359,8 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
                         aria-pressed={isTrigger}
                         aria-label={`${item} spikes me`}
                         className={cn(
-                          "px-2.5 py-1.5 text-[0.65rem] mono border-l border-ink/10 transition-colors",
-                          isTrigger ? "bg-ember-soft/40 text-ember" : "text-ink-muted hover:bg-cream-deep"
+                          "px-2.5 py-1.5 text-xs mono border-l border-ink/10 transition-colors",
+                          isTrigger ? "bg-ember-soft/40 text-ember-text" : "text-ink-muted hover:bg-cream-deep"
                         )}
                       >
                         spikes
@@ -387,7 +387,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
         </Section>
       )}
 
-      {error && <p className="text-sm text-ember mt-6">{error}</p>}
+      {error && <p className="text-sm text-ember-text mt-6">{error}</p>}
 
       <div className="flex items-center justify-between mt-10">
         <button
@@ -404,7 +404,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
             type="button"
             onClick={() => setStep((s) => s + 1)}
             disabled={!canAdvance}
-            className="inline-flex items-center gap-2 rounded-full bg-swiggy px-6 py-3 font-medium text-white transition-all hover:brightness-95 active:scale-[0.98] disabled:opacity-40"
+            className="btn-swiggy py-3 disabled:opacity-40"
           >
             Continue <ArrowRight size={16} />
           </button>
@@ -413,7 +413,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
             type="button"
             onClick={submit}
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-full bg-swiggy px-6 py-3 font-medium text-white transition-all hover:brightness-95 active:scale-[0.98] disabled:opacity-60"
+            className="btn-swiggy py-3 disabled:opacity-60"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
             {saving ? "Saving…" : "Build my profile"}
@@ -446,7 +446,7 @@ function NumberField({
 }) {
   return (
     <div>
-      <label className="mono text-ink-muted text-[0.65rem] block mb-1.5">{label}</label>
+      <label className="mono text-ink-muted text-xs block mb-1.5">{label}</label>
       <input
         type="number"
         inputMode="decimal"
@@ -456,7 +456,7 @@ function NumberField({
         onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
         className="w-full bg-cream-warm border border-ink/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-leaf"
       />
-      {hint && <p className="text-[0.7rem] text-ink-muted mt-1">{hint}</p>}
+      {hint && <p className="text-[0.8125rem] text-ink-muted mt-1">{hint}</p>}
     </div>
   );
 }
@@ -471,7 +471,7 @@ function Choice<T extends string>({
 }) {
   return (
     <div>
-      <label className="mono text-ink-muted text-[0.65rem] block mb-2">{label}</label>
+      <label className="mono text-ink-muted text-xs block mb-2">{label}</label>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
           <button
@@ -503,7 +503,7 @@ function ChipGroup({
 }) {
   return (
     <div>
-      <label className="mono text-ink-muted text-[0.65rem] block mb-2">{label}</label>
+      <label className="mono text-ink-muted text-xs block mb-2">{label}</label>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
           <button
@@ -544,7 +544,7 @@ function FreeList({
 
   return (
     <div>
-      <label className="mono text-ink-muted text-[0.65rem] block mb-2">{label}</label>
+      <label className="mono text-ink-muted text-xs block mb-2">{label}</label>
       <div className="flex gap-2">
         <input
           value={draft}

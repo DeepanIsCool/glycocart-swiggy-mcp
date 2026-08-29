@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Loader2, CheckCircle2, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, CheckCircle2, Wrench, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -27,6 +27,11 @@ export function ToolCallCard({
   const [open, setOpen] = useState(false);
   const label = TOOL_LABELS[toolName] ?? toolName;
   const isDone = state === "result";
+  // A tool can "complete" and still have failed. Showing a green tick for a
+  // failed Swiggy call made errors invisible unless you expanded the raw JSON.
+  const failed = isDone && (result as any)?.success === false;
+  const failureMessage =
+    failed ? ((result as any)?.error?.message ?? "Swiggy couldn't complete this request") : null;
 
   return (
     <div className="card overflow-hidden border-ink/8">
@@ -36,14 +41,16 @@ export function ToolCallCard({
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-ink/[0.02] transition-colors text-left"
       >
         <div className="flex items-center gap-2 flex-1">
-          {isDone ? (
-            <CheckCircle2 size={14} className="text-leaf flex-shrink-0" />
-          ) : (
+          {!isDone ? (
             <Loader2 size={14} className="text-ink-muted animate-spin flex-shrink-0" />
+          ) : failed ? (
+            <AlertCircle size={14} className="text-ember-text flex-shrink-0" />
+          ) : (
+            <CheckCircle2 size={14} className="text-leaf flex-shrink-0" />
           )}
           <Wrench size={12} className="text-ink-muted" />
-          <span className="mono text-[0.7rem] text-ink">{label}</span>
-          <span className="mono text-[0.65rem] text-ink-muted truncate">
+          <span className="mono text-[0.8125rem] text-ink">{label}</span>
+          <span className="mono text-xs text-ink-muted truncate">
             {args && Object.entries(args).slice(0, 2).map(([k, v]) =>
               `${k}=${truncate(String(v), 24)}`).join(" · ")}
           </span>
@@ -51,20 +58,24 @@ export function ToolCallCard({
         {open ? <ChevronDown size={14} className="text-ink-muted" /> : <ChevronRight size={14} className="text-ink-muted" />}
       </button>
 
+      {failureMessage && (
+        <p className="px-4 pb-3 -mt-1 text-[0.8125rem] text-ember-text">{failureMessage}</p>
+      )}
+
       {open && (
         <div className="px-4 pb-3 pt-1 border-t border-ink/8 bg-ink/[0.015]">
           {args && (
             <div className="mb-2">
-              <div className="mono text-[0.6rem] text-ink-muted mb-1">args</div>
-              <pre className="font-mono text-[0.7rem] text-ink-soft whitespace-pre-wrap break-all">
+              <div className="mono text-xs text-ink-muted mb-1">args</div>
+              <pre className="font-mono text-[0.8125rem] text-ink-soft whitespace-pre-wrap break-all">
                 {JSON.stringify(args, null, 2)}
               </pre>
             </div>
           )}
           {isDone && result && (
             <div>
-              <div className="mono text-[0.6rem] text-ink-muted mb-1">result</div>
-              <pre className="font-mono text-[0.7rem] text-ink-soft whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
+              <div className="mono text-xs text-ink-muted mb-1">result</div>
+              <pre className="font-mono text-[0.8125rem] text-ink-soft whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
                 {JSON.stringify(result, null, 2)}
               </pre>
             </div>
