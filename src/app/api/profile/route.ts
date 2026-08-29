@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     // Surface a diagnosable reason rather than a blanket message — a silent
     // "try again" on a misconfigured deployment just loops the user forever.
     const detail = err instanceof Error ? err.message.split("\n")[0] : String(err);
-    const isConfig = detail.includes("DATABASE_URL");
+    const isConfig = detail.includes("database connection string");
     return NextResponse.json(
       {
         error: isConfig

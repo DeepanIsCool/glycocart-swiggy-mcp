@@ -11,11 +11,27 @@ import type { UserProfile } from "./profile";
 
 let initialised = false;
 
+/**
+ * Vercel's Neon Marketplace integration injects its variables with a STORAGE_
+ * prefix, so accept both that and a plain DATABASE_URL (used locally, or when
+ * the connection string is set by hand). Pooled endpoints first — that's what
+ * serverless functions should be talking to.
+ */
+export function resolveDatabaseUrl(): string | undefined {
+  return (
+    process.env.DATABASE_URL ||
+    process.env.STORAGE_DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.STORAGE_POSTGRES_URL ||
+    undefined
+  );
+}
+
 function client() {
-  const url = process.env.DATABASE_URL;
+  const url = resolveDatabaseUrl();
   if (!url) {
     throw new Error(
-      "DATABASE_URL is not set. Provision the database with `vercel install neon`, then pull env vars with `vercel env pull .env.local`."
+      "No database connection string found. Expected DATABASE_URL or STORAGE_DATABASE_URL in the environment."
     );
   }
   return neon(url);

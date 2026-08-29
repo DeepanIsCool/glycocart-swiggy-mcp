@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { resolveDatabaseUrl } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,10 +11,12 @@ export const dynamic = "force-dynamic";
  * the connection string, credentials, or any row data.
  */
 export async function GET() {
-  const url = process.env.DATABASE_URL;
+  const url = resolveDatabaseUrl();
 
   const config = {
-    DATABASE_URL: !!url,
+    databaseUrlResolved: !!url,
+    DATABASE_URL: !!process.env.DATABASE_URL,
+    STORAGE_DATABASE_URL: !!process.env.STORAGE_DATABASE_URL,
     SWIGGY_TOKEN_SECRET: !!process.env.SWIGGY_TOKEN_SECRET,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? null,
     NVIDIA_API_KEY: !!process.env.NVIDIA_API_KEY,
@@ -22,7 +25,7 @@ export async function GET() {
 
   if (!url) {
     return NextResponse.json(
-      { ok: false, reason: "DATABASE_URL missing from this deployment", config },
+      { ok: false, reason: "No database connection string found in this deployment", config },
       { status: 503 }
     );
   }
