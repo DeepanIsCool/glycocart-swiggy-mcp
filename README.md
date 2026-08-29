@@ -119,7 +119,7 @@ You'll get $1 free credit on OpenRouter to test (~50 chat exchanges with Sonnet)
 For Swiggy MCP review:
 
 - **Dev**: `http://localhost:3000/api/auth/swiggy/callback`
-- **Prod**: `https://glycocart.vercel.app/api/auth/swiggy/callback` (will request whitelisting)
+- **Prod**: `https://glycocart.deepansadhukhan.com/api/auth/swiggy/callback` (whitelisted)
 - **Claude Desktop testing**: `https://claude.ai/api/mcp/auth_callback` (already on Swiggy's whitelist)
 
 ## Compliance

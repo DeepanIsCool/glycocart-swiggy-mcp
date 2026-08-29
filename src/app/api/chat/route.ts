@@ -2,6 +2,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { streamText, convertToCoreMessages } from "ai";
 import { buildToolset } from "@/lib/tools";
 import { PERSONAS, type PersonaId, type Persona } from "@/lib/personas";
+import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,8 +18,8 @@ export async function POST(req: Request) {
   };
 
   const useNvidia = provider === "nvidia";
-  const resolvedApiKey = customApiKey;
-  
+  const resolvedApiKey = customApiKey || (useNvidia ? process.env.NVIDIA_API_KEY : process.env.OPENROUTER_API_KEY);
+
   if (!resolvedApiKey) {
     return new Response(
       JSON.stringify({ error: "API Key is required. Please enter your API Key in the settings (BYOK) to test the product." }),
@@ -51,9 +52,10 @@ export async function POST(req: Request) {
   });
 
   const persona = PERSONAS[personaId] ?? PERSONAS.pcos;
-  const tools = buildToolset(persona.id);
+  const swiggyClient = await getSwiggyClient();
+  const tools = buildToolset(persona.id, swiggyClient);
 
-  const systemPrompt = buildSystemPrompt(persona);
+  const systemPrompt = buildSystemPrompt(persona, !!swiggyClient);
   
   const defaultModel = useNvidia 
     ? "meta/llama-3.1-70b-instruct" 
@@ -80,7 +82,7 @@ export async function POST(req: Request) {
   });
 }
 
-function buildSystemPrompt(persona: Persona) {
+function buildSystemPrompt(persona: Persona, hasRealSwiggySession: boolean) {
   return `You are GlycoCart, a glucose-aware ordering agent for Indian users managing metabolic health.
 
 USER PROFILE:
@@ -114,6 +116,9 @@ TOOL USE PATTERN:
 For "what should I have for lunch?" → use rank_dishes_for_user with calorie/cuisine filters.
 For "find me a north Indian place" → use search_restaurants, then get_restaurant_menu.
 For "order it" → confirm with user, then place_order.
+${hasRealSwiggySession
+  ? "The user has connected their REAL Swiggy account. search_restaurants_live and get_restaurant_menu_live are also available — they return real, live Swiggy data but are NOT glycemic-scored. Use them only when the user explicitly asks for their real account or real restaurants; otherwise keep using the metabolic-profile demo tools above. Real ordering is not yet available through this chat."
+  : "No real Swiggy account is connected — only the metabolic-profile demo tools above are available."}
 
 Keep responses tight. Use bullet points for dish lists. Show numbers (calories, predicted peak mg/dL).`;
 }

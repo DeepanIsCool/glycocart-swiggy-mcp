@@ -1,6 +1,7 @@
 "use client";
 
 import { useChat } from "ai/react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Send, Sparkles, ShoppingBag, CheckCircle2, Activity, Settings2, ChevronDown, Search, Info, Eye, EyeOff, XCircle, Loader2, ArrowDown } from "lucide-react";
 import type { Persona } from "@/lib/personas";
@@ -27,12 +28,14 @@ const PROMPT_BANK: Record<string, string[]> = {
   ]
 };
 
-export function ChatView({ persona }: { persona: Persona }) {
+export function ChatView({ persona, swiggyConnected }: { persona: Persona; swiggyConnected: boolean }) {
   const prompts = PROMPT_BANK[persona.id] ?? PROMPT_BANK.pcos;
+  const params = useSearchParams();
+  const connectError = params.get("connect_error") === "1";
   const [orderConfirmation, setOrderConfirmation] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const [provider, setProvider] = useState<"openrouter" | "nvidia">("openrouter");
+  const [provider, setProvider] = useState<"openrouter" | "nvidia">("nvidia");
   const [customModel, setCustomModel] = useState("");
   const [customApiKey, setCustomApiKey] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -42,11 +45,7 @@ export function ChatView({ persona }: { persona: Persona }) {
   const [isLoadingModels, setIsLoadingModels] = useState(false);
 
   const validateApiKey = () => {
-    if (!customApiKey.trim()) {
-      alert("Please enter your API Key in the AI Settings (BYOK) to test the product.");
-      setShowSettings(true);
-      return false;
-    }
+    if (!customApiKey.trim()) return true;
     if (provider === "nvidia" && !customApiKey.startsWith("nvapi-")) {
       alert("You selected NVIDIA but provided an API key that doesn't start with nvapi-. Please check your key or change the provider.");
       setShowSettings(true);
@@ -171,21 +170,36 @@ export function ChatView({ persona }: { persona: Persona }) {
                 <span className="mono text-[0.65rem]">cgm live · 102 mg/dL</span>
               </div>
             )}
-            <button onClick={() => setShowSettings(!showSettings)} className="text-ink-muted hover:text-ink transition-colors">
+            {swiggyConnected ? (
+              <span className="mono text-[0.65rem] text-leaf">swiggy connected</span>
+            ) : (
+              <a
+                href={`/api/auth/swiggy/login?p=${persona.id}`}
+                className="mono text-[0.65rem] text-ink-muted hover:text-ink transition-colors underline underline-offset-2"
+              >
+                connect real swiggy
+              </a>
+            )}
+            <button onClick={() => setShowSettings(!showSettings)} className="text-ink-muted hover:text-ink transition-colors p-2 -m-2">
               <Settings2 size={16} />
             </button>
           </div>
         </div>
+        {connectError && (
+          <p className="max-w-3xl mx-auto mt-2 mono text-[0.65rem] text-ember">
+            couldn't connect your Swiggy account — try again
+          </p>
+        )}
 
         {/* Settings Panel */}
         {showSettings && (
           <div className="max-w-3xl mx-auto mt-4 p-4 bg-cream-warm border border-ink/10 rounded-xl animate-fade-up">
             <h4 className="mono text-ink text-[0.7rem] mb-3">AI Settings (BYOK)</h4>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <select 
-                value={provider} 
+              <select
+                value={provider}
                 onChange={(e) => setProvider(e.target.value as "openrouter" | "nvidia")}
-                className="bg-cream border border-ink/10 rounded-md px-3 py-1.5 text-xs outline-none focus:border-leaf"
+                className="bg-cream border border-ink/10 rounded-md px-3 py-1.5 text-xs outline-none focus:border-leaf w-full sm:w-auto"
               >
                 <option value="openrouter">OpenRouter</option>
                 <option value="nvidia">NVIDIA</option>
@@ -199,7 +213,7 @@ export function ChatView({ persona }: { persona: Persona }) {
               <div className="relative flex-1">
                 <input 
                   type={showApiKey ? "text" : "password"}
-                  placeholder="Custom API Key (Required)"
+                  placeholder="Custom API Key (optional — demo key used if empty)"
                   value={customApiKey}
                   onChange={(e) => setCustomApiKey(e.target.value)}
                   className={cn(
@@ -353,7 +367,7 @@ export function ChatView({ persona }: { persona: Persona }) {
 function ContextChip({ label, value }: { label: string; value: string }) {
   return (
     <span className="inline-flex gap-1.5 items-baseline">
-      <span className="mono text-ink-muted text-[0.6rem]">{label}</span>
+      <span className="mono text-ink-muted text-[0.7rem]">{label}</span>
       <span className="text-ink-soft">{value}</span>
     </span>
   );
@@ -489,7 +503,7 @@ function ModelCombobox({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute top-full mt-1 left-0 w-64 md:w-80 z-50 bg-cream border border-ink/10 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] overflow-hidden flex flex-col max-h-[300px] animate-fade-up" style={{ animationDuration: '0.15s' }}>
+          <div className="absolute top-full mt-1 left-0 w-[min(20rem,calc(100vw-2.5rem))] z-50 bg-cream border border-ink/10 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] overflow-hidden flex flex-col max-h-[300px] animate-fade-up" style={{ animationDuration: '0.15s' }}>
             <div className="p-2 border-b border-ink/5 bg-cream-warm sticky top-0 z-10">
               <div className="flex items-center gap-2 bg-cream border border-ink/10 rounded px-2 py-1.5 focus-within:border-leaf transition-colors">
                 <Search size={12} className="text-ink-muted" />
@@ -502,7 +516,7 @@ function ModelCombobox({
                 />
               </div>
             </div>
-            <div className="overflow-y-auto flex-1 p-1 custom-scrollbar">
+            <div className="overflow-y-auto flex-1 p-1">
               {filtered.map(m => {
                 const isFree = parseFloat(m.pricing.prompt) === 0 && parseFloat(m.pricing.completion) === 0;
                 const ctxK = m.context_length ? Math.round(m.context_length / 1000) + 'K' : '';

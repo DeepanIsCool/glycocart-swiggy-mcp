@@ -18,7 +18,7 @@ export default function LandingPage() {
           <span className="display text-xl font-medium">GlycoCart</span>
         </div>
         <div className="flex items-center gap-6">
-          <a href="https://github.com" className="btn-ghost hidden sm:inline-flex">
+          <a href="https://github.com/DeepanIsCool/glycocart-swiggy-mcp" className="btn-ghost hidden sm:inline-flex">
             <span className="mono">github</span>
           </a>
           <span className="mono text-ink-muted hidden sm:inline">a swiggy mcp builder</span>

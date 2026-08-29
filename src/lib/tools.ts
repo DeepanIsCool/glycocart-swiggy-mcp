@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { tool } from "ai";
+import type { Client } from "@modelcontextprotocol/client";
 import { RESTAURANTS, getRestaurantWithMenu, getDish, type Dish } from "./catalog";
 import { predictGlucoseResponse, rankDishesForUser, type GlucosePrediction } from "./glycemic";
 import { PERSONAS, type PersonaId, type Persona } from "./personas";
@@ -19,10 +20,10 @@ import { PERSONAS, type PersonaId, type Persona } from "./personas";
  * that proxies to https://mcp.swiggy.com/food once OAuth is granted.
  */
 
-export function buildToolset(personaId: PersonaId) {
+export function buildToolset(personaId: PersonaId, swiggyClient: Client | null = null) {
   const persona = PERSONAS[personaId];
 
-  return {
+  const mockTools = {
     search_restaurants: tool({
       description:
         "Search Swiggy for restaurants near the user's saved address. Use when the user asks for food delivery options. Returns restaurants with cuisine, rating, ETA.",
@@ -155,6 +156,38 @@ export function buildToolset(personaId: PersonaId) {
       }
     })
   };
+
+  if (!swiggyClient) return mockTools;
+
+  return {
+    ...mockTools,
+    search_restaurants_live: tool({
+      description:
+        "Search REAL, live Swiggy restaurants via the user's connected Swiggy account. Real data — NOT scored for glycemic impact, unlike search_restaurants. Use only when the user explicitly wants their actual Swiggy account/real restaurants, not the metabolic-profile demo.",
+      parameters: z.object({
+        query: z.string().describe("cuisine, dish, or restaurant name"),
+        max_eta_min: z.coerce.number().optional().describe("max delivery time in minutes")
+      }),
+      execute: async (args) => callLiveTool(swiggyClient, "search_restaurants", args)
+    }),
+    get_restaurant_menu_live: tool({
+      description:
+        "Get a REAL, live restaurant menu via the user's connected Swiggy account. Real data — NOT scored for glycemic impact, unlike get_restaurant_menu.",
+      parameters: z.object({
+        restaurant_id: z.string()
+      }),
+      execute: async (args) => callLiveTool(swiggyClient, "get_restaurant_menu", args)
+    })
+  };
+}
+
+async function callLiveTool(client: Client, name: string, args: Record<string, unknown>) {
+  const result = await client.callTool({ name, arguments: args });
+  if (result.isError) {
+    const first = result.content?.[0] as { type?: string; text?: string } | undefined;
+    return { error: true, message: first?.type === "text" ? first.text : "Swiggy MCP call failed" };
+  }
+  return result.content;
 }
 
 function buildExplanation(dish: Dish, persona: Persona, pred: GlucosePrediction): string {

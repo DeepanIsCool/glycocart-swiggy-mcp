@@ -4,6 +4,7 @@ import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
 import { PERSONAS, type PersonaId } from "@/lib/personas";
 import { ChatView } from "@/components/chat-view";
+import { hasSwiggySession } from "@/lib/swiggy-mcp-client";
 
 export default async function ChatPage({
   searchParams
@@ -14,9 +15,10 @@ export default async function ChatPage({
   const id = (sp.p as PersonaId) ?? "pcos";
   if (!PERSONAS[id]) redirect("/");
   const persona = PERSONAS[id];
+  const swiggyConnected = await hasSwiggySession();
 
   return (
-    <main className="relative h-screen flex flex-col overflow-hidden">
+    <main className="relative h-dvh flex flex-col overflow-hidden">
       <header className="relative z-10 flex items-center justify-between px-5 md:px-10 py-5 border-b border-ink/10">
         <div className="flex items-center gap-3">
           <Link href="/" className="btn-ghost">
@@ -42,7 +44,7 @@ export default async function ChatPage({
         </div>
       </header>
 
-      <ChatView persona={persona} />
+      <ChatView persona={persona} swiggyConnected={swiggyConnected} />
     </main>
   );
 }

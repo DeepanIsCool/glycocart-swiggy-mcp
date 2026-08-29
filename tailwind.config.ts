@@ -37,6 +37,8 @@ const config: Config = {
       }
     }
   },
-  plugins: []
+  plugins: [
+    ({ addVariant }: any) => addVariant("hover", "@media (hover: hover) and (pointer: fine) { &:hover }")
+  ]
 };
 export default config;
