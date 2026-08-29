@@ -67,7 +67,7 @@ const ARCHETYPES: { keywords: string[]; label: string; macros: Omit<NutritionEst
     macros: { calories: 320, carbs: 54, protein: 11, fat: 6, fiber: 5, gi: 48, gl: 25.9 }
   },
   {
-    keywords: ["tikka", "kebab", "kabab", "grill", "tandoori", "seekh"],
+    keywords: ["tikka", "kebab", "kabab", "grill", "tandoori", "seekh", "craver", "wings"],
     label: "grilled protein",
     macros: { calories: 340, carbs: 8, protein: 32, fat: 20, fiber: 1, gi: 20, gl: 1.6 }
   },
@@ -120,12 +120,14 @@ const ARCHETYPES: { keywords: string[]; label: string; macros: Omit<NutritionEst
     macros: { calories: 450, carbs: 48, protein: 20, fat: 20, fiber: 3, gi: 58, gl: 27.8 }
   },
   {
-    keywords: ["fries", "samosa", "pakora", "pakoda", "bhaji", "fried", "crispy", "manchurian"],
+    keywords: ["fries", "samosa", "pakora", "pakoda", "bhaji", "fried", "crispy", "manchurian", "nugget", "popcorn chicken", "momo"],
     label: "deep-fried item",
     macros: { calories: 450, carbs: 48, protein: 7, fat: 26, fiber: 3, gi: 65, gl: 31.2 }
   },
   {
-    keywords: ["gulab", "jalebi", "halwa", "kheer", "rasmalai", "rasgulla", "brownie", "cake", "ice cream", "dessert", "sweet"],
+    // "waffle", "pancake", "donut", "pastry" all appeared in real order history
+    // and were previously unscored.
+    keywords: ["gulab", "jalebi", "halwa", "kheer", "rasmalai", "rasgulla", "brownie", "cake", "ice cream", "dessert", "sweet", "waffle", "pancake", "donut", "doughnut", "pastry", "muffin", "cookie", "choco"],
     label: "dessert",
     macros: { calories: 380, carbs: 62, protein: 5, fat: 13, fiber: 1, gi: 75, gl: 46.5 }
   },

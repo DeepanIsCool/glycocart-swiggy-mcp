@@ -43,6 +43,14 @@ for (const name of ["Chicken Burger", "Paneer Roll", "Chicken Hakka Noodles", "E
 const tikka = estimateNutrition("Chicken Tikka");
 assert.ok(tikka && tikka.carbs < 15, `Chicken Tikka should stay low-carb, got ${tikka?.carbs}g`);
 
+// Items seen in real Swiggy order history that used to come back unscored.
+for (const name of ["Mini Waffle box of 4 - Premium Assorted", "Chicken Seekh Craver", "Veg Momo"]) {
+  const e = estimateNutrition(name);
+  assert.ok(e, `${name} should now be estimable — seen unscored in real order history`);
+}
+const waffle = estimateNutrition("Mini Waffle box of 4 - Premium Assorted");
+assert.ok(waffle && waffle.gi >= 70, `waffle should score as a high-GI dessert, got GI ${waffle?.gi}`);
+
 // The critical case: unknown dishes must return null, never invented numbers.
 assert.equal(estimateNutrition("Zorbian Flarn Platter"), null);
 assert.equal(estimateNutrition(""), null);

@@ -14,12 +14,13 @@
     "typecheck": "tsc --noEmit",
     "test:nutrition": "tsc src/lib/nutrition-estimate.test.ts src/lib/nutrition-estimate.ts src/lib/catalog.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/nutrition-estimate.test.js",
     "test:profile": "tsc src/lib/profile.test.ts src/lib/profile.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/profile.test.js",
-    "test": "npm run test:nutrition && npm run test:profile && npm run test:glycemic && npm run test:image && npm run test:cart-safety && npm run test:cart-guard && npm run test:contrast",
+    "test": "npm run test:nutrition && npm run test:profile && npm run test:glycemic && npm run test:image && npm run test:cart-safety && npm run test:cart-guard && npm run test:daily && npm run test:contrast",
     "test:contrast": "tsc src/lib/contrast.test.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/contrast.test.js",
     "test:glycemic": "tsc src/lib/glycemic.test.ts src/lib/glycemic.ts src/lib/profile.ts src/lib/catalog.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/glycemic.test.js",
     "test:image": "tsc src/lib/swiggy-image.test.ts src/lib/swiggy-image.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/swiggy-image.test.js",
     "test:cart-safety": "tsc src/lib/cart-safety.test.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/cart-safety.test.js",
-    "test:cart-guard": "tsc src/lib/cart-guard.test.ts src/lib/cart-tools.ts src/lib/swiggy-tools.ts src/lib/glycemic.ts src/lib/nutrition-estimate.ts src/lib/catalog.ts src/lib/profile.ts src/lib/swiggy-image.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/cart-guard.test.js"
+    "test:cart-guard": "tsc src/lib/cart-guard.test.ts src/lib/cart-tools.ts src/lib/swiggy-tools.ts src/lib/glycemic.ts src/lib/nutrition-estimate.ts src/lib/catalog.ts src/lib/profile.ts src/lib/swiggy-image.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/cart-guard.test.js",
+    "test:daily": "tsc src/lib/daily-log.test.ts src/lib/daily-log.ts src/lib/db.ts src/lib/profile.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/daily-log.test.js"
   },
   "dependencies": {
     "@ai-sdk/openai": "1.0.7",

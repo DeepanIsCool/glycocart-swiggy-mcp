@@ -6,6 +6,7 @@ import { getSwiggyClient, getInstamartClient } from "@/lib/swiggy-mcp-client";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { appendMessages } from "@/lib/sessions";
+import { getBudget, budgetSummary } from "@/lib/daily-log";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -83,7 +84,16 @@ export async function POST(req: Request) {
   // Groceries are a bonus surface; never block a reply on them.
   const instamartClient = await getInstamartClient().catch(() => null);
   const tools = buildToolset(profile, swiggyClient, instamartClient);
-  const systemPrompt = buildSystemPrompt(profile, !!instamartClient);
+
+  // What they've already eaten today changes what to recommend now.
+  let todaysBudget = "";
+  try {
+    todaysBudget = budgetSummary(await getBudget(uid, profile));
+  } catch (err) {
+    console.error("Could not read daily budget", err);
+  }
+
+  const systemPrompt = buildSystemPrompt(profile, !!instamartClient, todaysBudget);
   
   const defaultModel = useNvidia
     ? (process.env.NVIDIA_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b")
@@ -171,7 +181,7 @@ function describeError(error: unknown): string {
  * condition, and whether it invents numbers. Written as explicit contracts
  * rather than vibes.
  */
-function buildSystemPrompt(profile: UserProfile, hasGroceries: boolean) {
+function buildSystemPrompt(profile: UserProfile, hasGroceries: boolean, todaysBudget: string) {
   const m = profile.metabolic;
   const goal =
     profile.goal === "lose" ? "lose weight" : profile.goal === "gain" ? "gain weight" : "maintain weight";
@@ -194,6 +204,9 @@ Avoiding: ${profile.blocklist.join(", ") || "none stated"}
 How these numbers were derived (explain if asked):
 ${m.derivation.map((d) => `- ${d}`).join("\n")}
 
+## TODAY SO FAR
+${todaysBudget || "No daily log available."}
+
 ## WHAT YOU CAN DO
 You have three groups of tools. Choosing the wrong group is the most common failure — route deliberately.
 
@@ -205,6 +218,11 @@ You have three groups of tools. Choosing the wrong group is the most common fail
 
 2. CART (build it; you cannot buy it)
    get_food_cart, update_food_cart, flush_food_cart, fetch_food_coupons, apply_food_coupon.
+
+   HISTORY (read-only)
+   get_food_orders ....... past orders with retrospective glucose estimates.
+   track_food_order ...... live status for an order already placed in Swiggy.
+   get_food_order_details  detail for one past order.
 ${hasGroceries ? `
 3. GROCERIES — Instamart (the weekly shop; higher leverage than any single meal)
    search_products ....... groceries, glucose-scored.
@@ -216,7 +234,8 @@ ${hasGroceries ? `
 "What should I eat / order me lunch / I'm hungry"     -> search_menu
 "Find me a restaurant / anything from <place>"        -> search_restaurants, then get_restaurant_menu
 "Add that / order the second one"                     -> update_food_cart
-"What's in my cart / how much"                        -> get_food_cart${hasGroceries ? `
+"What's in my cart / how much"                        -> get_food_cart
+"What have I been eating / my orders / where is it"   -> get_food_orders (activeOnly for a live delivery)${hasGroceries ? `
 "Weekly shop / groceries / buy rice, atta, snacks"    -> search_products
 "What do I usually buy / make my basket healthier"    -> your_go_to_items, then propose swaps` : ""}
 

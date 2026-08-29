@@ -3,6 +3,7 @@ import type { UserProfile } from "./profile";
 import { buildSwiggyTools } from "./swiggy-tools";
 import { buildCartTools } from "./cart-tools";
 import { buildInstamartTools } from "./instamart-tools";
+import { buildOrderTools } from "./orders-tools";
 
 /**
  * The agent's toolset. Every user is signed in to their own Swiggy account,
@@ -18,6 +19,7 @@ export function buildToolset(
   return {
     ...buildSwiggyTools(swiggyClient, profile),
     ...buildCartTools(swiggyClient, profile),
+    ...buildOrderTools(swiggyClient, profile),
     // Groceries are optional: if Instamart is unreachable the agent simply
     // doesn't get those tools rather than the whole chat failing.
     ...(instamartClient ? buildInstamartTools(instamartClient, profile) : {})
