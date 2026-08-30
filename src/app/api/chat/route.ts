@@ -2,7 +2,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { streamText, convertToCoreMessages } from "ai";
 import { buildToolset } from "@/lib/tools";
 import type { UserProfile } from "@/lib/profile";
-import { getSwiggyClient, getInstamartClient } from "@/lib/swiggy-mcp-client";
+import { getSwiggyClient, getInstamartClient, getDineoutClient } from "@/lib/swiggy-mcp-client";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { appendMessages } from "@/lib/sessions";
@@ -81,9 +81,12 @@ export async function POST(req: Request) {
     );
   }
 
-  // Groceries are a bonus surface; never block a reply on them.
-  const instamartClient = await getInstamartClient().catch(() => null);
-  const tools = buildToolset(profile, swiggyClient, instamartClient);
+  // Groceries and dining out are bonus surfaces; never block a reply on them.
+  const [instamartClient, dineoutClient] = await Promise.all([
+    getInstamartClient().catch(() => null),
+    getDineoutClient().catch(() => null)
+  ]);
+  const tools = buildToolset(profile, swiggyClient, instamartClient, dineoutClient);
 
   // What they've already eaten today changes what to recommend now.
   let todaysBudget = "";
@@ -93,7 +96,7 @@ export async function POST(req: Request) {
     console.error("Could not read daily budget", err);
   }
 
-  const systemPrompt = buildSystemPrompt(profile, !!instamartClient, todaysBudget);
+  const systemPrompt = buildSystemPrompt(profile, !!instamartClient, !!dineoutClient, todaysBudget);
   
   const defaultModel = useNvidia
     ? (process.env.NVIDIA_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b")
@@ -111,9 +114,17 @@ export async function POST(req: Request) {
     temperature: 0.4,
     // Persist both sides once the turn completes, so a reload restores the
     // conversation. Ownership of sessionId is verified inside appendMessages.
-    onFinish: async ({ text, toolCalls, toolResults }) => {
+    onFinish: async ({ text, toolCalls, toolResults, steps }) => {
       if (!sessionId) return;
       const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
+
+      // `toolCalls`/`toolResults` describe only the FINAL step. With maxSteps the
+      // last step is the text reply, so both were always empty and no tool
+      // result was ever saved — reopening a chat lost every card. Flatten every
+      // step instead.
+      const allCalls = steps?.flatMap((s: any) => s.toolCalls ?? []) ?? toolCalls ?? [];
+      const allResults = steps?.flatMap((s: any) => s.toolResults ?? []) ?? toolResults ?? [];
+
       try {
         await appendMessages(uid, sessionId, [
           ...(lastUser ? [{ role: "user" as const, content: String(lastUser.content ?? ""), toolInvocations: null }] : []),
@@ -121,7 +132,9 @@ export async function POST(req: Request) {
             role: "assistant" as const,
             content: text ?? "",
             toolInvocations:
-              toolCalls?.length || toolResults?.length ? { toolCalls, toolResults } : null
+              allCalls.length || allResults.length
+                ? { toolCalls: allCalls, toolResults: allResults }
+                : null
           }
         ]);
       } catch (err) {
@@ -181,7 +194,12 @@ function describeError(error: unknown): string {
  * condition, and whether it invents numbers. Written as explicit contracts
  * rather than vibes.
  */
-function buildSystemPrompt(profile: UserProfile, hasGroceries: boolean, todaysBudget: string) {
+function buildSystemPrompt(
+  profile: UserProfile,
+  hasGroceries: boolean,
+  hasDineout: boolean,
+  todaysBudget: string
+) {
   const m = profile.metabolic;
   const goal =
     profile.goal === "lose" ? "lose weight" : profile.goal === "gain" ? "gain weight" : "maintain weight";
@@ -229,21 +247,32 @@ ${hasGroceries ? `
    your_go_to_items ...... what they habitually buy. Use this to propose lower-GI swaps.
    get_instamart_cart, update_instamart_cart, list_instamart_coupons.` : `
 3. GROCERIES — currently unavailable. If they ask about groceries, say Instamart isn't reachable right now.`}
+${hasDineout ? `
+4. EATING OUT — Dineout (a table, not a delivery)
+   search_dineout ............ restaurants to book a table at. Pass ONE term: a cuisine, a name, an area, or a vibe ("rooftop", "buffet"). Each result carries an ordering brief built from its cuisines and this user's own model.
+   get_dineout_restaurant .... timings, amenities, offers for one place.
+   get_dineout_slots ......... table availability on a date. Read-only.
+   Dineout publishes NO menu, only cuisines — never claim to know a dineout restaurant's dishes.` : `
+4. EATING OUT — Dineout is not reachable right now. Say so if they ask about booking a table.`}
 
 ## ROUTING
 "What should I eat / order me lunch / I'm hungry"     -> search_menu
 "Find me a restaurant / anything from <place>"        -> search_restaurants, then get_restaurant_menu
 "Add that / order the second one"                     -> update_food_cart
 "What's in my cart / how much"                        -> get_food_cart
-"What have I been eating / my orders / where is it"   -> get_food_orders (activeOnly for a live delivery)${hasGroceries ? `
+"What have I been eating / my orders / where is it"   -> get_food_orders (activeOnly for a live delivery)${hasDineout ? `
+"Book a table / going out / dinner with friends"      -> search_dineout` : ""}${hasGroceries ? `
 "Weekly shop / groceries / buy rice, atta, snacks"    -> search_products
 "What do I usually buy / make my basket healthier"    -> your_go_to_items, then propose swaps` : ""}
 
 ADDRESS RULE: use the addressId in the profile above directly. Do NOT call get_addresses and do NOT ask where they are — they chose this during setup. Only fetch addresses if none is saved, the tool reports the address is stale, or they explicitly want to order somewhere else. Never invent an addressId.
 
-## YOU CANNOT PLACE ORDERS — THIS IS DELIBERATE
-You have no checkout, payment or order-placing tool. Swiggy orders cannot be cancelled through the API; they require phoning Swiggy support. So GlycoCart builds the cart and the person completes checkout in the Swiggy app.
-If asked to order: say plainly that you've built the cart and they finish in Swiggy. Do not apologise repeatedly, do not pretend, and never claim an order was placed.
+## YOU CANNOT PLACE ORDERS OR BOOK TABLES — THIS IS DELIBERATE
+You have no checkout, payment, order-placing or table-booking tool. Swiggy orders cannot be cancelled through the API; they require phoning Swiggy support. The live Dineout server exposes no cancel either. So GlycoCart builds the cart or finds the table, and the person finishes in the Swiggy app.
+If asked to order or book: say plainly what you've prepared and that they finish in Swiggy. Do not apologise repeatedly, do not pretend, and never claim an order was placed or a table reserved.
+
+## THE CART IS PER-ADDRESS
+A Swiggy cart belongs to one delivery address. If someone says the cart isn't showing in their Swiggy app, the usual cause is that the app has a different address selected — say that, and name the address the cart was built for. Do not tell them the cart failed.
 
 ## HONESTY — THESE OVERRIDE BEING HELPFUL
 - Every glucose figure is an ESTIMATE from matching a dish NAME against Indian food composition tables. Swiggy publishes no per-dish nutrition. Say "estimated".
@@ -264,7 +293,11 @@ Their dietary preferences and avoid-list are not suggestions. Do not recommend a
 - Provider/tool error -> say what failed in one short sentence and what they can try.
 
 ## HOW TO WRITE
-The UI renders your text as PLAIN TEXT and already shows a card per dish with name, price, calories, carbs and predicted peak.
+The UI renders your text as PLAIN TEXT. It ALREADY draws rich cards for you:
+- a dish card per item from search_menu / get_restaurant_menu (photo, price, kcal, carbs, peak, an add-to-cart button)
+- a restaurant card per result from search_restaurants (photo, cuisines, rating, delivery time, cost) which opens the full scored menu
+- a dineout card per result from search_dineout (photo, offers, amenities, the ordering brief)
+So a numbered list of restaurants or dishes in your text is duplicated noise. Never write one.
 - No markdown tables, no ** bold **, no # headings — they render as literal characters.
 - Do NOT restate the card data in prose.
 - Write 2-4 sentences: which one you'd pick, why it suits THIS person's profile specifically, and any caveat.

@@ -36,7 +36,9 @@ export async function GET() {
 const addSchema = z.object({
   restaurantId: z.string().min(1),
   restaurantName: z.string().min(1),
-  addressId: z.string().min(1),
+  // Optional: the saved default is the right answer almost always, and asking
+  // every caller to pass it invites one of them to pass the wrong one.
+  addressId: z.string().min(1).optional(),
   menuItemId: z.string().min(1),
   quantity: z.coerce.number().min(0).default(1)
 });
@@ -47,7 +49,11 @@ export async function POST(req: Request) {
 
   const parsed = addSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Invalid cart request." }, { status: 400 });
-  const { restaurantId, restaurantName, addressId, menuItemId, quantity } = parsed.data;
+  const { restaurantId, restaurantName, menuItemId, quantity } = parsed.data;
+  const addressId = parsed.data.addressId ?? ctx.profile!.defaultAddressId;
+  if (!addressId) {
+    return NextResponse.json({ error: "Pick a delivery address in Settings first." }, { status: 403 });
+  }
 
   const result = await ctx.tools!.update_food_cart.execute(
     {

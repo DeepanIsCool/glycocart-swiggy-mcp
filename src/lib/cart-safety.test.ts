@@ -19,19 +19,29 @@ const FORBIDDEN = [
   "confirm_order",
   "checkout",
   "get_payment_options",
-  "check_payment_status"
+  "check_payment_status",
+  // Dineout: the live server exposes no cancel_booking, so a table booked here
+  // could not be undone either.
+  "book_table",
+  "create_cart"
 ];
 
 /**
- * Find every string passed as an MCP tool name. Covers BOTH servers: Food goes
- * through callSwiggy/callSwiggyRaw, Instamart through callInstamart. Missing a
- * call path here would silently un-gate that server.
+ * Find every string passed as an MCP tool name, across all three servers.
+ *
+ * Matches any `callSomething(client, "tool_name")` helper rather than an
+ * explicit list — adding a fourth server used to silently un-gate it, because
+ * the old regex named Swiggy and Instamart only.
  */
 function calledToolNames(source: string): string[] {
   const names: string[] = [];
-  const re = /call(?:SwiggyRaw|Swiggy|Instamart)\s*\(\s*client\s*,\s*["'`]([^"'`]+)["'`]/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(source))) names.push(m[1]);
+  for (const re of [
+    /call[A-Za-z]*\s*\(\s*client\s*,\s*["'`]([^"'`]+)["'`]/g,
+    /callTool\s*\(\s*\{\s*name\s*:\s*["'`]([^"'`]+)["'`]/g
+  ]) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(source))) names.push(m[1]);
+  }
   return names;
 }
 
@@ -51,7 +61,7 @@ for (const { file, name } of called) {
 
 // The tools the agent is offered must not be named after checkout either —
 // checked across every tool-building module, not just the food cart.
-for (const file of ["cart-tools.ts", "instamart-tools.ts", "swiggy-tools.ts"]) {
+for (const file of ["cart-tools.ts", "instamart-tools.ts", "swiggy-tools.ts", "dineout-tools.ts"]) {
   const text = readFileSync(join(LIB, file), "utf8");
   for (const bad of FORBIDDEN) {
     assert.ok(

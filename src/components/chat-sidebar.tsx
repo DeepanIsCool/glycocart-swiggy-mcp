@@ -102,7 +102,9 @@ export function ChatSidebar({
               onClick={() => onSelect(s.id)}
               className="flex-1 min-w-0 text-left px-3 py-2.5"
             >
-              <span className="block text-sm truncate">{s.title}</span>
+              {/* Two lines, wrapping on words. A single truncated line cut most
+                  real titles mid-word — "Show me open restaurants near my h…" */}
+              <span className="block text-sm leading-snug line-clamp-2 break-words">{s.title}</span>
               <span className="block text-xs text-ink-muted mt-0.5">
                 {new Date(s.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
               </span>
@@ -111,7 +113,8 @@ export function ChatSidebar({
               type="button"
               onClick={() => remove(s.id)}
               aria-label={`Delete chat: ${s.title}`}
-              className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-ink-muted hover:text-ember-text transition-all p-2 mr-1"
+              // Always visible on touch, where there is no hover to reveal it.
+              className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 text-ink-muted hover:text-ember-text transition-all p-2 mr-1"
             >
               <Trash2 size={14} />
             </button>
@@ -134,7 +137,7 @@ export function ChatSidebar({
       )}
 
       {/* Docked on wide screens */}
-      <aside className="hidden md:flex w-64 shrink-0 border-r border-ink/10 bg-cream-warm/40">{list}</aside>
+      <aside className="hidden md:flex w-72 shrink-0 border-r border-ink/10 bg-cream-warm/40">{list}</aside>
     </>
   );
 }

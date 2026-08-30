@@ -81,20 +81,34 @@ export function predictGlucoseResponse(dish: Dish, profile: UserProfile): Glucos
   }
   auc -= FASTING_BASELINE * 180; // subtract baseline area → "delta AUC"
 
-  // Match score: lower peak vs target = higher score
-  const targetPeak = 140; // ADA recommends < 140 mg/dL post-prandial
+  // How far this meal pushes them above their OWN resting level. This is the
+  // physiological insult, and it is what makes one dish better than another.
+  const rise = peak - FASTING_BASELINE;
+
+  // Match score: primarily the rise, plus a hard penalty for crossing ADA's
+  // <140 mg/dL post-prandial target.
+  //
+  // It used to penalise ONLY peaks above 140, so for anyone whose curve never
+  // got there — most users with a normal baseline — every single dish scored a
+  // flat 100. That silently turned "Best for you" and the search ranking into
+  // menu order with a misleading label. The score must discriminate across the
+  // whole range, not just past a clinical cliff.
+  const targetPeak = 140;
+  const risePenalty = Math.max(0, rise) * 1.2;
   const peakPenalty = Math.max(0, peak - targetPeak) * 1.5;
   const aucPenalty = Math.max(0, auc / metabolic.baselineAUC - 1) * 35;
-  const matchScore = Math.max(0, Math.min(100, Math.round(100 - peakPenalty - aucPenalty)));
+  const matchScore = Math.max(
+    0,
+    Math.min(100, Math.round(100 - risePenalty - peakPenalty - aucPenalty))
+  );
 
-  // Verdict blends the ABSOLUTE peak (ADA's <140 mg/dL post-prandial target)
-  // with the RISE above this user's own baseline, taking the worse of the two.
+  // Verdict blends the ABSOLUTE peak with the RISE above this user's own
+  // baseline, taking the worse of the two.
   //
   // Absolute thresholds alone were useless for anyone with a low baseline: a
   // user at 88 mg/dL with low carb sensitivity got "excellent" for pizza,
   // biryani AND dessert, because nothing ever crossed 130. That is both
   // undiscriminating and actively misleading in a metabolic-health app.
-  const rise = peak - FASTING_BASELINE;
   const band = (v: number, t: [number, number, number]) =>
     v < t[0] ? 0 : v < t[1] ? 1 : v < t[2] ? 2 : 3;
   const severity = Math.max(band(peak, [130, 145, 165]), band(rise, [15, 30, 45]));

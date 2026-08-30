@@ -86,6 +86,29 @@ assert.ok(
 const highPeak = predictGlucoseResponse(dish("Sugar Bomb", 90, 120), profile(126, 0.85));
 assert.ok(highPeak.peakMgDl > 165 && highPeak.verdict === "poor");
 
+// REGRESSION — matchScore is what "Best for you" and the search results sort
+// by. It only penalised peaks above 140 mg/dL, so for a user whose curve never
+// reaches that, EVERY dish scored a flat 100 and the ranking was a no-op
+// wearing a useful label. Scores must separate dishes across the normal range.
+const scores = [GRILLED, DAL, PIZZA, DESSERT].map(
+  (d) => predictGlucoseResponse(d, lowBaseline).matchScore
+);
+assert.equal(new Set(scores).size, 4, `matchScore must discriminate, got ${scores.join(",")}`);
+assert.ok(
+  scores[0] > scores[2] && scores[1] > scores[3],
+  `grilled/dal must outrank pizza/dessert, got ${scores.join(",")}`
+);
+// And it must stay monotone: a bigger rise never scores better.
+const byRise = [GRILLED, DAL, PIZZA, DESSERT]
+  .map((d) => predictGlucoseResponse(d, lowBaseline))
+  .sort((a, b) => a.peakMgDl - b.peakMgDl);
+for (let i = 1; i < byRise.length; i++) {
+  assert.ok(
+    byRise[i].matchScore <= byRise[i - 1].matchScore,
+    "a higher peak must never earn a higher match score"
+  );
+}
+
 // A user's own baseline is the floor of their curve.
 const p = predictGlucoseResponse(DAL, profile(126, 0.85));
 assert.equal(p.curve[0].mgDl, 126, "curve must start at the user's fasting baseline");

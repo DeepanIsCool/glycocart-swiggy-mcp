@@ -21,6 +21,9 @@
     font-feature-settings: "ss01", "cv11";
     /* Small UI text was reading thin; 400 is the floor, not 300. */
     font-weight: 400;
+    /* A single wide child used to make the whole app scroll sideways on a
+       phone. Individual wide blocks scroll inside their own container. */
+    overflow-x: hidden;
   }
   ::selection {
     @apply bg-leaf/20 text-ink;

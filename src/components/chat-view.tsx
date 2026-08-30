@@ -7,6 +7,12 @@ import {
   CheckCircle2, XCircle, Loader2, ArrowDown
 } from "lucide-react";
 import { DishCard, type ScoredItem } from "./dish-card";
+import {
+  RestaurantCard,
+  DineoutCard,
+  type ScoredRestaurant,
+  type DineoutRestaurantView
+} from "./restaurant-card";
 import { ToolCallCard } from "./tool-call-card";
 import { ChatSidebar, ChatHistoryButton } from "./chat-sidebar";
 import { cn } from "@/lib/utils";
@@ -123,7 +129,11 @@ export function ChatView({ profile }: { profile: ProfileView }) {
         (stored ?? []).map((m: any, i: number) => ({
           id: `${id}-${i}`,
           role: m.role,
-          content: m.content ?? ""
+          content: m.content ?? "",
+          // Without this a reopened chat came back as bare text — every dish,
+          // restaurant and dineout card was dropped, which is most of the
+          // answer. The tool results were in the database the whole time.
+          toolInvocations: restoreInvocations(m.toolInvocations)
         }))
       );
     } catch {
@@ -230,11 +240,13 @@ export function ChatView({ profile }: { profile: ProfileView }) {
         refreshKey={sessionsKey}
       />
 
-      <div className="flex flex-col flex-1 min-h-0">
+      {/* min-w-0: a flex child defaults to min-width:auto, so one wide tool-call
+          line made the entire chat column wider than the phone screen. */}
+      <div className="flex flex-col flex-1 min-h-0 min-w-0">
       {/* Profile context bar */}
       <div className="px-5 md:px-10 py-4 bg-leaf-pale/40 border-b border-ink/8 relative z-20 shrink-0">
-        <div className="max-w-3xl mx-auto flex items-center justify-between text-xs gap-4">
-          <div className="flex items-center gap-3 flex-wrap">
+        <div className="max-w-3xl mx-auto flex items-center justify-between text-xs gap-4 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap min-w-0">
             <ChatHistoryButton onClick={() => setSidebarOpen(true)} />
             <ContextChip label="condition" value={profile.conditionLabel} />
             <ContextChip label="target" value={`${profile.dailyCalTarget} kcal/day`} />
@@ -305,9 +317,9 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-5 md:px-10 pt-6 pb-4 min-h-0 relative"
+        className="flex-1 overflow-y-auto overflow-x-hidden px-5 md:px-10 pt-6 pb-4 min-h-0 relative"
       >
-        <div className="max-w-3xl mx-auto space-y-5">
+        <div className="max-w-3xl mx-auto space-y-5 min-w-0">
           {empty && <EmptyState profile={profile} />}
 
           {messages.map((m) => (
@@ -330,6 +342,14 @@ export function ChatView({ profile }: { profile: ProfileView }) {
                     />
                   ))}
 
+                  {extractRestaurants(m).map((r, i) => (
+                    <RestaurantCard key={`${r.id ?? r.name}-${i}`} r={r} />
+                  ))}
+
+                  {extractDineout(m).map((r, i) => (
+                    <DineoutCard key={`dineout-${r.id ?? r.name}-${i}`} r={r} />
+                  ))}
+
                   {extractScoredItems(m).map((item, i) => (
                     <DishCard
                       key={`${item.id ?? item.name}-${i}`}
@@ -350,8 +370,8 @@ export function ChatView({ profile }: { profile: ProfileView }) {
                   )}
 
                   {m.content && (
-                    <div className="bg-cream-warm/60 px-4 py-3 rounded-2xl rounded-bl-md max-w-[92%] text-sm leading-relaxed text-ink whitespace-pre-wrap">
-                      {m.content}
+                    <div className="bg-cream-warm/60 px-4 py-3 rounded-2xl rounded-bl-md max-w-[92%] text-sm leading-relaxed text-ink whitespace-pre-wrap break-words">
+                      {plainText(m.content)}
                     </div>
                   )}
                 </>
@@ -501,6 +521,66 @@ function extractScoredItems(msg: any): ScoredItem[] {
   const scored = out.filter((i) => i?.glycemic);
   const unscored = out.filter((i) => i && !i.glycemic);
   return [...scored, ...unscored].slice(0, 5);
+}
+
+/**
+ * Rebuild `toolInvocations` from what was persisted. The chat route stores the
+ * SDK's `{ toolCalls, toolResults }`; the UI needs one merged record per call
+ * with its result attached.
+ */
+function restoreInvocations(stored: any): any[] | undefined {
+  const calls = stored?.toolCalls;
+  if (!Array.isArray(calls) || calls.length === 0) return undefined;
+  const results = new Map(
+    (stored.toolResults ?? []).map((r: any) => [r?.toolCallId, r?.result])
+  );
+  return calls.map((c: any) => ({
+    toolCallId: c?.toolCallId,
+    toolName: c?.toolName,
+    args: c?.args,
+    state: results.has(c?.toolCallId) ? "result" : "call",
+    result: results.get(c?.toolCallId)
+  }));
+}
+
+/**
+ * The reply is rendered as plain text, so stray markdown shows up as literal
+ * asterisks and hashes. The system prompt asks the model not to emit any; it
+ * still does occasionally, and a prompt is not an enforcement mechanism.
+ */
+function plainText(s: string): string {
+  return s
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/(^|\s)\*(\S(?:.*?\S)?)\*(?=\s|$)/g, "$1$2")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "· ");
+}
+
+/**
+ * Restaurants from search_restaurants. These used to arrive as structured data
+ * and get rendered as a wall of numbered prose, because nothing in the UI knew
+ * what to do with them.
+ */
+function extractRestaurants(msg: any): ScoredRestaurant[] {
+  const out: ScoredRestaurant[] = [];
+  for (const t of msg.toolInvocations ?? []) {
+    if (t.state !== "result" || t.toolName !== "search_restaurants") continue;
+    if (Array.isArray(t.result?.restaurants)) out.push(...t.result.restaurants);
+  }
+  // Open places first — a shut restaurant is not a recommendation.
+  const open = out.filter((r) => r.is_open !== false);
+  const closed = out.filter((r) => r.is_open === false);
+  return [...open, ...closed].slice(0, 6);
+}
+
+/** Dineout results carry their own ordering brief, so they get their own card. */
+function extractDineout(msg: any): DineoutRestaurantView[] {
+  const out: DineoutRestaurantView[] = [];
+  for (const t of msg.toolInvocations ?? []) {
+    if (t.state !== "result" || t.toolName !== "search_dineout") continue;
+    if (Array.isArray(t.result?.restaurants)) out.push(...t.result.restaurants);
+  }
+  return out.slice(0, 6);
 }
 
 /** True when a tool ran but the underlying Swiggy call reported failure. */

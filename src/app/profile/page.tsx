@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { MapPin, Pencil, Info } from "lucide-react";
+import { MapPin, Pencil, Info, Settings as SettingsIcon } from "lucide-react";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { BottomNav } from "@/components/bottom-nav";
@@ -29,9 +29,15 @@ export default async function ProfilePage() {
               <p className="text-ink-soft mt-1">{profile.conditionLabel}</p>
               {conditionBlurb && <p className="text-ink-muted text-sm mt-1">{conditionBlurb}</p>}
             </div>
-            <Link href="/onboarding" className="btn-ghost shrink-0" aria-label="Edit profile">
-              <Pencil size={14} /> edit
-            </Link>
+            <div className="flex items-center gap-1 shrink-0">
+              <Link href="/onboarding" className="btn-ghost" aria-label="Edit profile">
+                <Pencil size={14} /> edit
+              </Link>
+              {/* Settings gave up its nav tab to Dine out; this is its way in. */}
+              <Link href="/settings" className="btn-ghost" aria-label="Settings">
+                <SettingsIcon size={15} />
+              </Link>
+            </div>
           </header>
 
           {/* Delivery address */}

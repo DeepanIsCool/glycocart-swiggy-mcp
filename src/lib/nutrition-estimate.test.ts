@@ -48,8 +48,56 @@ for (const name of ["Mini Waffle box of 4 - Premium Assorted", "Chicken Seekh Cr
   const e = estimateNutrition(name);
   assert.ok(e, `${name} should now be estimable — seen unscored in real order history`);
 }
+// A Subway "Craver" is a sub, not a skewer — it was scored as grilled protein
+// at 8g carbs, hiding a whole bread roll from someone counting carbs.
+const craver = estimateNutrition("Chicken Seekh Craver");
+assert.ok(
+  craver && craver.carbs > 30,
+  `a Subway sub must count its bread, got ${craver?.carbs}g`
+);
+
 const waffle = estimateNutrition("Mini Waffle box of 4 - Premium Assorted");
 assert.ok(waffle && waffle.gi >= 70, `waffle should score as a high-GI dessert, got GI ${waffle?.gi}`);
+
+// REGRESSION — a whole restaurant menu reported identical macros. Live from
+// Wow! Momo: three completely different foods all came back 450 kcal / 48g
+// carbs, because a trailing word in the DESCRIPTION outranked the dish's own
+// name ("Chicken Moburg", described as "Burger filled with … fried momos",
+// scored as a momo). The name decides the dish type; the description is only a
+// fallback.
+const moburg = estimateNutrition(
+  "Chicken Moburg",
+  "Burger filled with crispy chicken fried momos and topped with red and green sauce and mayonnaise."
+);
+const steamMomo = estimateNutrition("Chicken Pahari Fresh Steam Momo");
+const bigFries = estimateNutrition("OG Crispy Fries Large");
+for (const [label, e] of [["Moburg", moburg], ["Steam Momo", steamMomo], ["Fries", bigFries]] as const) {
+  assert.ok(e, `${label} should estimate`);
+}
+const macroKey = (e: typeof moburg) => `${e!.calories}/${e!.carbs}/${e!.protein}`;
+assert.equal(
+  new Set([macroKey(moburg), macroKey(steamMomo), macroKey(bigFries)]).size,
+  3,
+  `a burger, a steamed momo and fries must not share macros — got ${macroKey(moburg)}, ${macroKey(steamMomo)}, ${macroKey(bigFries)}`
+);
+// A burger is not butter chicken. "Chicken Moburg" matched the catalog entry
+// "Butter Chicken" on a mid-name "chicken" and reported 14g carbs for a bun.
+assert.ok(
+  moburg!.carbs > 30,
+  `a burger must be scored as high-carb, got ${moburg!.carbs}g (butter-chicken mismatch has returned)`
+);
+// ...and the head-noun rule must survive portion suffixes.
+const servesTwo = estimateNutrition("Hyderabadi Chicken Biryani [Serves 2]");
+assert.equal(servesTwo?.confidence, "matched", "a portion suffix must not break the catalog match");
+
+// A steamed momo is a genuinely better choice than the deep-fried version, and
+// must score that way rather than being lumped in with it.
+const friedMomo = estimateNutrition("Kurkure Fried Momo");
+assert.ok(friedMomo, "fried momo should estimate");
+assert.ok(
+  steamMomo!.protein > friedMomo!.protein && steamMomo!.calories < friedMomo!.calories,
+  `steamed momo should beat fried on protein and calories, got steamed ${steamMomo!.calories}kcal/${steamMomo!.protein}g vs fried ${friedMomo!.calories}kcal/${friedMomo!.protein}g`
+);
 
 // The critical case: unknown dishes must return null, never invented numbers.
 assert.equal(estimateNutrition("Zorbian Flarn Platter"), null);

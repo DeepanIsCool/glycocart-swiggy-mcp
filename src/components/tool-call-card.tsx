@@ -40,7 +40,10 @@ export function ToolCallCard({
         onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-ink/[0.02] transition-colors text-left"
       >
-        <div className="flex items-center gap-2 flex-1">
+        {/* min-w-0 everywhere a truncate lives: without it the long tool label
+            and args set the page's minimum width, and the whole chat scrolled
+            sideways on a 375px screen. */}
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           {!isDone ? (
             <Loader2 size={14} className="text-ink-muted animate-spin flex-shrink-0" />
           ) : failed ? (
@@ -48,14 +51,18 @@ export function ToolCallCard({
           ) : (
             <CheckCircle2 size={14} className="text-leaf flex-shrink-0" />
           )}
-          <Wrench size={12} className="text-ink-muted" />
-          <span className="mono text-[0.8125rem] text-ink">{label}</span>
-          <span className="mono text-xs text-ink-muted truncate">
+          <Wrench size={12} className="text-ink-muted shrink-0" />
+          <span className="mono text-[0.8125rem] text-ink truncate shrink-0 max-w-[55%]">{label}</span>
+          <span className="mono text-xs text-ink-muted truncate min-w-0">
             {args && Object.entries(args).slice(0, 2).map(([k, v]) =>
               `${k}=${truncate(String(v), 24)}`).join(" · ")}
           </span>
         </div>
-        {open ? <ChevronDown size={14} className="text-ink-muted" /> : <ChevronRight size={14} className="text-ink-muted" />}
+        {open ? (
+          <ChevronDown size={14} className="text-ink-muted shrink-0" />
+        ) : (
+          <ChevronRight size={14} className="text-ink-muted shrink-0" />
+        )}
       </button>
 
       {failureMessage && (

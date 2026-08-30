@@ -2,15 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, ShoppingBag, Receipt, User, Settings } from "lucide-react";
+import { MessageSquare, ShoppingBag, UtensilsCrossed, Receipt, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Five tabs is the most that fits legibly at 375px. Settings lost its tab to
+// Dineout and is reached from the Profile header instead — it's a
+// set-once surface, unlike the four you touch daily.
 const TABS = [
   { href: "/chat", label: "Chat", Icon: MessageSquare },
   { href: "/cart", label: "Cart", Icon: ShoppingBag },
+  { href: "/dineout", label: "Dine out", Icon: UtensilsCrossed },
   { href: "/orders", label: "Orders", Icon: Receipt },
-  { href: "/profile", label: "Profile", Icon: User },
-  { href: "/settings", label: "Settings", Icon: Settings }
+  { href: "/profile", label: "Profile", Icon: User }
 ];
 
 /**

@@ -1,13 +1,35 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Trash2, ExternalLink, AlertTriangle, ShoppingBag } from "lucide-react";
+import Image from "next/image";
+import { Loader2, Trash2, ExternalLink, AlertTriangle, ShoppingBag, MapPin, UtensilsCrossed } from "lucide-react";
 import { formatINR } from "@/lib/utils";
+
+function CartThumb({ src }: { src?: string | null }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="relative shrink-0 size-14 rounded-xl overflow-hidden bg-cream-deep flex items-center justify-center">
+      {src && !failed ? (
+        <Image src={src} alt="" fill sizes="56px" className="object-cover" onError={() => setFailed(true)} />
+      ) : (
+        <UtensilsCrossed size={18} className="text-ink-muted" aria-hidden />
+      )}
+    </span>
+  );
+}
 
 interface Cart {
   cart_id: string | null;
   restaurant: { id?: string; name?: string; area?: string } | null;
-  items: { menu_item_id: string; name: string; quantity: number; price?: number }[];
+  delivering_to?: string | null;
+  items: {
+    menu_item_id: string;
+    name: string;
+    quantity: number;
+    price?: number;
+    strikeout_price?: number;
+    image_url?: string | null;
+  }[];
   pricing: {
     item_total?: number;
     delivery_charge?: number;
@@ -87,23 +109,43 @@ export function CartView() {
 
   return (
     <div className="space-y-4">
-      {cart?.restaurant?.name && (
+      {(cart?.restaurant?.name || cart?.delivering_to) && (
         <div className="card-solid p-4">
-          <p className="mono text-ink-muted text-xs mb-1">from</p>
-          <p className="font-medium">{cart.restaurant.name}</p>
-          {cart.restaurant.area && <p className="text-sm text-ink-muted">{cart.restaurant.area}</p>}
+          {cart?.restaurant?.name && (
+            <>
+              <p className="mono text-ink-muted text-xs mb-1">from</p>
+              <p className="font-medium">{cart.restaurant.name}</p>
+            </>
+          )}
+          {/* A Swiggy cart belongs to one address. If the Swiggy app has a
+              different address selected, this cart looks like it vanished — so
+              name the address rather than leaving it a mystery. */}
+          {cart?.delivering_to && (
+            <p className="flex items-start gap-2 text-sm text-ink-muted leading-relaxed mt-1">
+              <MapPin size={14} className="shrink-0 mt-0.5" />
+              <span>{cart.delivering_to}</span>
+            </p>
+          )}
         </div>
       )}
 
       <div className="card-solid divide-y divide-ink/8">
         {items.map((i) => (
-          <div key={i.menu_item_id} className="p-4 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium break-words">{i.name}</p>
+          <div key={i.menu_item_id} className="p-3 flex items-center gap-3">
+            <CartThumb src={i.image_url} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium break-words leading-snug">{i.name}</p>
               <p className="text-xs text-ink-muted mt-0.5">Qty {i.quantity}</p>
             </div>
             {typeof i.price === "number" && (
-              <p className="text-sm tabular-nums shrink-0">{formatINR(i.price)}</p>
+              <p className="text-sm tabular-nums shrink-0 text-right">
+                {formatINR(i.price)}
+                {typeof i.strikeout_price === "number" && (
+                  <span className="block text-xs text-ink-muted line-through">
+                    {formatINR(i.strikeout_price)}
+                  </span>
+                )}
+              </p>
             )}
           </div>
         ))}
@@ -151,9 +193,14 @@ export function CartView() {
         <p className="flex items-start gap-2 text-sm text-ink-soft leading-relaxed">
           <AlertTriangle size={15} className="text-swiggy-text shrink-0 mt-0.5" />
           <span>
-            This is a real cart on your Swiggy account. GlycoCart doesn&apos;t place orders —
-            Swiggy orders can&apos;t be cancelled from an app, only by calling their support, so
-            you finish checkout in Swiggy yourself.
+            This is a real cart on your Swiggy account, built through their API. GlycoCart
+            doesn&apos;t place orders — Swiggy orders can&apos;t be cancelled from an app, only by
+            calling their support, so you finish checkout in Swiggy yourself.{" "}
+            <strong className="font-medium text-ink">
+              If it doesn&apos;t appear in the Swiggy app, check that the app has the same delivery
+              address selected
+            </strong>{" "}
+            — carts are per-address.
           </span>
         </p>
         <a
@@ -162,7 +209,7 @@ export function CartView() {
           rel="noopener noreferrer"
           className="btn-swiggy w-full mt-3 py-2.5 text-sm"
         >
-          Checkout in Swiggy <ExternalLink size={14} />
+          Open Swiggy to check out <ExternalLink size={14} />
         </a>
       </div>
 

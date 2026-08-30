@@ -18,7 +18,8 @@ export interface StoredMessage {
 export function titleFromMessage(text: string): string {
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) return "New chat";
-  return clean.length > 48 ? `${clean.slice(0, 45)}…` : clean;
+  // The sidebar wraps to two lines, so titles have room for a full question.
+  return clean.length > 64 ? `${clean.slice(0, 61)}…` : clean;
 }
 
 export async function listSessions(uid: string): Promise<ChatSession[]> {

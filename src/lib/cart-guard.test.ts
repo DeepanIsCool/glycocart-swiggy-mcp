@@ -41,10 +41,13 @@ const profile: UserProfile = {
 /** Minimal stand-in for the MCP client, returning real-shaped payloads. */
 function fakeClient(cartPayload: unknown) {
   const calls: string[] = [];
+  const sent: any[] = [];
   const client: any = {
     calls,
-    async callTool({ name }: { name: string }) {
+    sent,
+    async callTool({ name, arguments: args }: { name: string; arguments: any }) {
       calls.push(name);
+      sent.push({ name, args });
       const body = name === "get_food_cart" ? cartPayload : { statusMessage: "CART_UPDATED_SUCCESSFULLY", data: {} };
       return { content: [{ type: "text", text: JSON.stringify(body) }], isError: false };
     }
@@ -137,6 +140,79 @@ async function main() {
   // Double-nested payload must still resolve.
   assert.equal(cart.restaurant.name, "Food Peddler Sandwiches");
   assert.ok(cart.glucose.total_carbs_g > 0, "cart glucose load should be estimated");
+}
+
+// --- Adding a SECOND dish must not drop the first -------------------------
+// Swiggy treats cartItems as the whole cart, not a delta. Sending only the new
+// line replaced the existing one — seen live: adding a second momo silently
+// removed the momo already in the cart.
+{
+  const client = fakeClient(cartWithFoodPeddler);
+  const tools = buildCartTools(client, profile);
+  await tools.update_food_cart.execute(
+    {
+      restaurantId: "123",
+      restaurantName: "Food Peddler Sandwiches",
+      addressId: "addr-1",
+      cartItems: [{ menu_item_id: "2", quantity: 1 }]
+    },
+    ctx
+  );
+  const update = client.sent.find((c: any) => c.name === "update_food_cart");
+  const ids = update.args.cartItems.map((i: any) => i.menu_item_id).sort();
+  assert.deepEqual(
+    ids,
+    ["2", "50503674"],
+    `adding an item must keep what was already in the cart, sent ${JSON.stringify(ids)}`
+  );
+}
+
+// --- Quantity 0 removes that line, and keeps the others -------------------
+{
+  const twoItems = {
+    data: {
+      data: {
+        restaurant: { name: "Food Peddler Sandwiches" },
+        items: [
+          { menu_item_id: 50503674, name: "7 Veggie Sandwich", quantity: 1 },
+          { menu_item_id: 777, name: "Dal Tadka", quantity: 2 }
+        ]
+      }
+    }
+  };
+  const client = fakeClient(twoItems);
+  const tools = buildCartTools(client, profile);
+  await tools.update_food_cart.execute(
+    {
+      restaurantId: "123",
+      restaurantName: "Food Peddler Sandwiches",
+      addressId: "addr-1",
+      cartItems: [{ menu_item_id: "50503674", quantity: 0 }]
+    },
+    ctx
+  );
+  const update = client.sent.find((c: any) => c.name === "update_food_cart");
+  assert.deepEqual(update.args.cartItems, [{ menu_item_id: "777", quantity: 2 }]);
+}
+
+// --- Removing the LAST line empties the cart rather than sending nothing ---
+{
+  const client = fakeClient(cartWithFoodPeddler);
+  const tools = buildCartTools(client, profile);
+  await tools.update_food_cart.execute(
+    {
+      restaurantId: "123",
+      restaurantName: "Food Peddler Sandwiches",
+      addressId: "addr-1",
+      cartItems: [{ menu_item_id: "50503674", quantity: 0 }]
+    },
+    ctx
+  );
+  assert.ok(client.calls.includes("flush_food_cart"), "emptying the cart must use flush_food_cart");
+  assert.ok(
+    !client.calls.includes("update_food_cart"),
+    "must not send update_food_cart with an empty item list"
+  );
 }
 
   console.log("cart-guard: all checks passed");

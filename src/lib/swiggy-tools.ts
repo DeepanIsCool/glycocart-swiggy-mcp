@@ -88,6 +88,24 @@ interface RawMenuItem {
   inStock?: number | boolean;
   hasVariants?: boolean;
   hasAddons?: boolean;
+  isBestseller?: boolean;
+}
+
+/** One restaurant from search_restaurants, normalised for the UI card. */
+function shapeRestaurant(r: any) {
+  return {
+    id: r?.id,
+    name: r?.name,
+    cuisines: r?.cuisines ?? [],
+    rating: r?.avgRating,
+    total_ratings: r?.totalRatings,
+    cost_for_two: r?.costForTwo,
+    area: r?.areaName,
+    distance_km: r?.distanceKm,
+    delivery_time: r?.deliveryTimeRange ?? (r?.deliveryTimeMinutes ? `${r.deliveryTimeMinutes} mins` : undefined),
+    image_url: swiggyImageUrl(r?.imageUrl),
+    is_open: r?.availabilityStatus ? r.availabilityStatus === "OPEN" : undefined
+  };
 }
 
 /**
@@ -106,6 +124,7 @@ function scoreRealItem(item: RawMenuItem, profile: UserProfile) {
     restaurant_name: item.restaurantName,
     rating: item.rating,
     total_ratings: item.totalRatings,
+    is_bestseller: Boolean(item.isBestseller),
     // Swiggy sends 0/1 as often as a boolean; absent means "assume available".
     in_stock: item.inStock === undefined ? true : Boolean(item.inStock),
     // Variant/addon items have a "from" price that changes at cart time.
@@ -160,8 +179,19 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
         query: z.string().min(1).describe("restaurant name or cuisine, cannot be empty"),
         offset: z.coerce.number().optional()
       }),
-      execute: async ({ addressId, query, offset }) =>
-        callSwiggy(client, "search_restaurants", { addressId, query, offset })
+      execute: async ({ addressId, query, offset }) => {
+        const res = await callSwiggy(client, "search_restaurants", { addressId, query, offset });
+        if (res?.success === false) return res;
+        const data = unwrapSwiggy<any>(res);
+        return {
+          restaurants: (data?.restaurants ?? []).map(shapeRestaurant),
+          total: data?.totalRestaurants ?? data?.total,
+          has_more: data?.hasMore,
+          next_offset: data?.nextOffset,
+          render_note:
+            "The UI already renders a card per restaurant with name, cuisines, rating, price and delivery time. Do NOT list them again in prose — say which one you'd pick for this user and why."
+        };
+      }
     }),
 
     get_restaurant_menu: tool({
@@ -178,25 +208,32 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
         if (res?.success === false) return res;
 
         const data = unwrapSwiggy<any>(res);
+        // The restaurant lives at data.restaurant, NOT at the top level. Reading
+        // data.id left every menu item without a restaurant_id, which silently
+        // hid the "Add to cart" button on every dish opened from a menu.
+        const r = data?.restaurant ?? {};
         const categories = (data?.categories ?? []).map((cat: any) => ({
-          title: cat.title,
+          title: cat.name ?? cat.title,
           items: (cat.items ?? []).map((it: any) =>
-            scoreRealItem(
-              { ...it, restaurantId: data?.id, restaurantName: data?.name },
-              profile
-            )
+            scoreRealItem({ ...it, restaurantId: r.id, restaurantName: r.name }, profile)
           )
         }));
         return {
           restaurant: {
-            id: data?.id,
-            name: data?.name,
-            area: data?.areaName,
-            rating: data?.avgRating,
-            is_open: data?.isOpen,
-            delivery_time: data?.deliveryTime
+            id: r.id,
+            name: r.name,
+            area: r.areaName,
+            rating: r.avgRating,
+            total_ratings: r.totalRatingsString,
+            cost_for_two: r.costForTwoMessage,
+            cuisines: r.cuisines ?? [],
+            is_open: r.isOpen,
+            delivery_time: r.slaString ?? (r.deliveryTime ? `${r.deliveryTime} mins` : undefined),
+            image_url: swiggyImageUrl(r.imageUrl)
           },
           categories,
+          total_categories: data?.totalCategories,
+          page: data?.page,
           has_more: data?.hasMore,
           scoring_note:
             "Glucose forecasts are ESTIMATES from dish-name matching against Indian food composition tables — Swiggy does not publish per-dish nutrition. Tell the user this, and treat 'archetype' confidence as a rough category average."

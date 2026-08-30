@@ -5,7 +5,11 @@ import { CookieOAuthProvider } from "./swiggy-oauth-provider";
 import { deriveUid } from "./crypto";
 
 export const SWIGGY_FOOD_MCP_URL = "https://mcp.swiggy.com/food";
-export const SWIGGY_INSTAMART_MCP_URL = "https://mcp.swiggy.com/instamart";
+// Instamart is served from /im, NOT /instamart — the latter falls through to the
+// consumer website and every connect attempt failed with an HTML page. Verified
+// against the published reference ("POST mcp.swiggy.com/im").
+export const SWIGGY_INSTAMART_MCP_URL = "https://mcp.swiggy.com/im";
+export const SWIGGY_DINEOUT_MCP_URL = "https://mcp.swiggy.com/dineout";
 
 export const SWIGGY_REDIRECT_URI = `${
   process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
@@ -33,6 +37,14 @@ export async function getSwiggyClient(): Promise<Client | null> {
  */
 export async function getInstamartClient(): Promise<Client | null> {
   return connectTo(SWIGGY_INSTAMART_MCP_URL);
+}
+
+/**
+ * Dineout — table bookings. The one Swiggy surface whose transactions ARE
+ * reversible (`cancel_booking` exists), unlike food orders.
+ */
+export async function getDineoutClient(): Promise<Client | null> {
+  return connectTo(SWIGGY_DINEOUT_MCP_URL);
 }
 
 async function connectTo(serverUrl: string): Promise<Client | null> {
