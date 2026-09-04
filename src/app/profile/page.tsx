@@ -24,7 +24,6 @@ export default async function ProfilePage() {
         <div className="max-w-2xl mx-auto">
           <header className="flex items-start justify-between gap-4 mb-8">
             <div className="min-w-0">
-              <p className="mono text-ink-muted text-xs mb-1">your profile</p>
               <h1 className="display text-4xl leading-tight">{profile.displayName}</h1>
               <p className="text-ink-soft mt-1">{profile.conditionLabel}</p>
               {conditionBlurb && <p className="text-ink-muted text-sm mt-1">{conditionBlurb}</p>}
@@ -69,7 +68,7 @@ export default async function ProfilePage() {
             <div className="rounded-xl bg-cream p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Info size={14} className="text-ink-muted" />
-                <span className="mono text-ink-muted text-xs">how we got these</span>
+                <span className="section-label">How we got these</span>
               </div>
               <ul className="space-y-2">
                 {m.derivation.map((line, i) => (
@@ -114,7 +113,7 @@ export default async function ProfilePage() {
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="card-solid p-5 mb-4">
-      <h2 className="mono text-ink-muted text-xs mb-3">{title}</h2>
+      <h2 className="section-label mb-3">{title}</h2>
       {children}
     </section>
   );
@@ -150,7 +149,7 @@ function ChipRow({
         : "bg-cream border-ink/10 text-ink-soft";
   return (
     <div>
-      <p className="mono text-ink-muted text-xs mb-2">{label}</p>
+      <p className="section-label mb-2">{label}</p>
       <div className="flex flex-wrap gap-2">
         {items.map((item) => (
           <span key={item} className={`rounded-full border px-3 py-1 text-sm ${toneClass}`}>

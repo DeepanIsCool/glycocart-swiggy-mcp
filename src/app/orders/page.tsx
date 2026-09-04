@@ -43,8 +43,10 @@ export default async function OrdersPage() {
       <main className="app-scroll px-5 md:px-10 py-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-6">
-            <p className="mono text-ink-muted text-xs mb-1">from your swiggy account</p>
             <h1 className="display text-4xl leading-tight">Orders</h1>
+            <p className="text-ink-muted text-sm mt-1">
+              Placed on your Swiggy account, scored after the fact.
+            </p>
           </div>
 
           {error && <p className="text-sm text-ember-text mb-4">{error}</p>}
@@ -101,7 +103,7 @@ export default async function OrdersPage() {
 
           {orders.length > 0 && (
             <p className="text-xs text-ink-muted leading-relaxed mt-4">
-              Glucose figures are retrospective estimates from item names — Swiggy stores no
+              Glucose figures are retrospective estimates from item names. Swiggy stores no
               nutrition data. Useful for spotting patterns, not for precise numbers.
             </p>
           )}

@@ -1,148 +1,108 @@
 import Image from "next/image";
-import { ArrowUpRight, Clock, ShieldCheck, LineChart, type LucideIcon } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 
+/**
+ * Deliberately not a SaaS landing page.
+ *
+ * The previous version had every tell: an ALL-CAPS eyebrow over the headline,
+ * one word of it in italic serif, a numbered 01/02/03 explainer, three feature
+ * cards under the hero each with an icon in a circle, and a coloured dot
+ * reading "live on swiggy mcp". None of that said anything a generated page
+ * couldn't. What follows is specific and checkable instead — including the part
+ * where the product refuses to do the obvious thing.
+ */
 export default function LandingPage() {
   return (
     <main className="relative min-h-dvh overflow-hidden">
-      {/* Top bar */}
       <header className="relative z-10 flex items-center justify-between px-6 md:px-10 py-6">
         <div className="flex items-center gap-3">
-          <Image
-            src="/glycocart_logo.png"
-            alt="GlycoCart Logo"
-            width={40}
-            height={40}
-            className="rounded-full"
-          />
+          <Image src="/glycocart_logo.png" alt="" width={36} height={36} className="rounded-full" />
           <span className="display text-xl font-medium">GlycoCart</span>
         </div>
-        <div className="flex items-center gap-5">
-          <a
-            href="https://github.com/DeepanIsCool/glycocart-swiggy-mcp"
-            className="btn-ghost hidden sm:inline-flex"
-          >
-            <span className="mono">github</span>
-          </a>
-          <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-swiggy/30 bg-swiggy/10 px-3 py-1.5">
-            <span className="size-1.5 rounded-full bg-swiggy" />
-            <span className="mono text-xs text-swiggy-text">live on swiggy mcp</span>
-          </span>
-        </div>
+        <a
+          href="https://github.com/DeepanIsCool/glycocart-swiggy-mcp"
+          className="text-sm text-ink-muted hover:text-ink transition-colors"
+        >
+          Source
+        </a>
       </header>
 
-      {/* Hero */}
-      <section className="relative z-10 px-6 md:px-10 pt-10 md:pt-16 pb-14">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-12 gap-10 items-end">
-          <div className="md:col-span-8 animate-fade-up" style={{ animationDelay: "0.1s" }}>
-            <p className="mono text-leaf mb-6">a glucose-aware ordering agent</p>
-            <h1 className="display text-[3.2rem] sm:text-[4.5rem] md:text-[6rem] leading-[0.92] tracking-[-0.02em]">
-              Order food
-              <br />
-              that <em className="italic text-leaf font-light">works</em>
-              <br />
-              for your body.
-            </h1>
-          </div>
-          <div className="md:col-span-4 animate-fade-up" style={{ animationDelay: "0.3s" }}>
-            <p className="text-lg leading-relaxed text-ink-soft max-w-sm">
-              Sign in with Swiggy, answer a few questions about your body, and
-              GlycoCart estimates the glucose impact of real dishes near you —
-              built for PCOS, prediabetes and anyone watching their glucose.
+      <section className="relative z-10 px-6 md:px-10 pt-8 md:pt-14 pb-16">
+        <div className="max-w-5xl mx-auto">
+          <h1 className="display text-[2.75rem] sm:text-[4rem] md:text-[5rem] leading-[0.95] tracking-[-0.02em] max-w-3xl">
+            Order food that works for your body.
+          </h1>
+
+          <div className="mt-8 max-w-xl">
+            <p className="text-lg leading-relaxed text-ink-soft">
+              Sign in with Swiggy and answer a few questions about your metabolism.
+              GlycoCart then scores the real dishes near you against your own numbers,
+              so the choice that suits you is the one at the top of the list.
             </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row md:flex-col">
-              <a
-                href="/api/auth/swiggy/login"
-                className="btn-swiggy"
-              >
+
+            <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <a href="/api/auth/swiggy/login" className="btn-swiggy">
                 Sign in with Swiggy
                 <ArrowUpRight size={16} />
               </a>
-              <p className="mono text-ink-muted text-xs self-center sm:self-start md:self-center">
-                you&apos;ll need a swiggy account
+              <p className="text-sm text-ink-muted">You&apos;ll need a Swiggy account.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* The distinctive claim, given the most space. */}
+      <section className="relative z-10 px-6 md:px-10 pb-20">
+        <div className="max-w-5xl mx-auto border-t border-ink/10 pt-10">
+          <div className="max-w-2xl">
+            <h2 className="display text-2xl sm:text-3xl mb-4">
+              It will not place your order.
+            </h2>
+            <p className="text-ink-soft leading-relaxed mb-4">
+              A Swiggy order cannot be cancelled through the API. Once it is placed, the
+              only way out is phoning Swiggy on 080-67466729. So GlycoCart builds a real
+              cart on your account, prices it, tells you what it will do to your glucose,
+              and then stops. You press the last button yourself, in Swiggy.
+            </p>
+            <p className="text-ink-soft leading-relaxed">
+              The agent has no checkout tool at all. Not a rule it has been asked to
+              follow, not a confirmation dialog. The tool is simply never given to it, and
+              a test in the repository fails if anyone adds one. Table bookings work the
+              same way, because Swiggy&apos;s live booking API has no cancel either.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 px-6 md:px-10 pb-14">
+        <div className="max-w-5xl mx-auto border-t border-ink/10 pt-10">
+          <div className="grid md:grid-cols-[16rem_1fr] gap-4 md:gap-10">
+            <h2 className="display text-2xl">Where the numbers come from</h2>
+            <div className="max-w-2xl">
+              <p className="text-ink-soft leading-relaxed mb-4">
+                Swiggy publishes no per-dish nutrition, so nothing here is read off a
+                label. Carbohydrate, fibre and glycemic load are matched from Indian food
+                composition tables, then run through a response model built from your
+                questionnaire: your fasting baseline, your carb sensitivity, your calorie
+                target.
+              </p>
+              <p className="text-ink-soft leading-relaxed">
+                That makes every figure an estimate, and the app says so every time it
+                shows one. A dish it cannot recognise is marked unscored rather than
+                guessed at. It is a lifestyle tool, not a diagnostic one; talk to your
+                clinician before changing how you manage your condition.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="relative z-10 px-6 md:px-10 pb-16">
-        <div className="max-w-7xl mx-auto grid sm:grid-cols-3 gap-5">
-          <Step
-            n="01"
-            Icon={ShieldCheck}
-            title="Sign in with Swiggy"
-            body="Real OAuth through Swiggy's MCP gateway. We never see your password, and we read only what you approve on Swiggy's consent screen."
-          />
-          <Step
-            n="02"
-            Icon={LineChart}
-            title="Every dish gets a curve"
-            body="We estimate carbs, fibre and glycemic load from Indian food composition tables, then model your 3-hour glucose response."
-          />
-          <Step
-            n="03"
-            Icon={Clock}
-            title="Decide in seconds"
-            body="Dishes are ranked by predicted peak against your profile — so the safe choice is the first one you see, not the one you have to hunt for."
-          />
+      <footer className="relative z-10 px-6 md:px-10 pb-12">
+        <div className="max-w-5xl mx-auto border-t border-ink/10 pt-6 flex flex-wrap justify-between gap-3 text-sm text-ink-muted">
+          <p>Built by Deepan Sadhukhan for Swiggy Builders Club.</p>
+          <p>Runs on Swiggy&apos;s production MCP over OAuth 2.1.</p>
         </div>
-      </section>
-
-      {/* Footer notes — kept to what is actually true today */}
-      <section className="relative z-10 px-6 md:px-10 pb-16 max-w-7xl mx-auto">
-        <div className="border-t border-ink/10 pt-8 grid md:grid-cols-3 gap-6">
-          <Footnote
-            num="Live MCP"
-            text="Runs on Swiggy's production Food MCP server over OAuth 2.1 with PKCE. Restaurants, menus and prices come straight from Swiggy."
-          />
-          <Footnote
-            num="Estimated, not measured"
-            text="Swiggy publishes no per-dish nutrition, so glucose figures are estimates matched from food composition tables. Dishes we can't estimate are shown unscored, never guessed."
-          />
-          <Footnote
-            num="Not medical advice"
-            text="A lifestyle tool, not a diagnostic one. Your Swiggy session is stored encrypted and never leaves the server. Talk to your clinician before changing how you manage your condition."
-          />
-        </div>
-        <p className="mono text-ink-muted text-xs mt-8">
-          built by deepan sadhukhan · swiggy builders club
-        </p>
-      </section>
+      </footer>
     </main>
-  );
-}
-
-function Step({
-  n,
-  Icon,
-  title,
-  body
-}: {
-  n: string;
-  Icon: LucideIcon;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="card p-6 animate-fade-up">
-      <div className="flex items-center gap-3 mb-4">
-        <span className="inline-flex size-8 items-center justify-center rounded-full bg-swiggy/12 text-swiggy-text">
-          <Icon size={15} />
-        </span>
-        <span className="mono text-ink-muted text-xs">{n}</span>
-      </div>
-      <h3 className="display text-xl mb-2">{title}</h3>
-      <p className="text-sm text-ink-soft leading-relaxed">{body}</p>
-    </div>
-  );
-}
-
-function Footnote({ num, text }: { num: string; text: string }) {
-  return (
-    <div>
-      <p className="mono text-leaf mb-2">{num}</p>
-      <p className="text-sm text-ink-soft leading-relaxed">{text}</p>
-    </div>
   );
 }

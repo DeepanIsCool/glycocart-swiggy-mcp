@@ -102,7 +102,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(
-          [body.error ?? "Couldn't save your profile.", body.detail].filter(Boolean).join(" — ")
+          [body.error ?? "Couldn't save your profile.", body.detail].filter(Boolean).join(". ")
         );
       }
       router.push("/chat");
@@ -132,7 +132,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
 
       {step === 0 && (
         <Section
-          title="First — what should we call you?"
+          title="First, what should we call you?"
           sub="This is only used to greet you. Nothing here is shared with Swiggy."
         >
           <input
@@ -143,7 +143,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
             className="w-full bg-cream-warm border border-ink/10 rounded-xl px-4 py-3 text-base outline-none focus:border-leaf"
           />
 
-          <p className="mono text-ink-muted text-[0.8125rem] mt-8 mb-3">what are you managing?</p>
+          <p className="section-label mt-8 mb-3">What are you managing?</p>
           <div className="grid gap-2">
             {CONDITIONS.map((c) => (
               <button
@@ -180,7 +180,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
             <div className="rounded-xl border border-ember/30 bg-ember-soft/20 p-4">
               <p className="text-sm text-ink-soft leading-relaxed">
                 No saved addresses found on your Swiggy account. Add one in the Swiggy
-                app first — restaurant search needs a delivery address to work. You can
+                app first. Restaurant search needs a delivery address to work. You can
                 finish setting up here and add it after.
               </p>
             </div>
@@ -205,7 +205,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
                 <MapPin size={15} className="text-ink-muted mt-0.5 shrink-0" />
                 <span className="min-w-0">
                   {(addr.tag || addr.category) && (
-                    <span className="mono text-ink-muted text-xs block mb-0.5">
+                    <span className="section-label block mb-0.5">
                       {[addr.tag, addr.category].filter(Boolean).join(" · ")}
                     </span>
                   )}
@@ -220,7 +220,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
       {step === 2 && (
         <Section
           title="Do you know any recent numbers?"
-          sub="Optional — but they replace our estimates with your actual values. Skip if you don't have them to hand."
+          sub="Optional, but they replace our estimates with your actual values. Skip if you don't have them to hand."
         >
           <NumberField
             label="HbA1c (%)"
@@ -240,7 +240,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
           <p className="text-xs text-ink-muted leading-relaxed mt-4">
             If you give an HbA1c we convert it using the standard ADA average-glucose
             formula. Without either number we start from a typical value for your
-            condition — an estimate, not a measurement.
+            condition. An estimate, not a measurement.
           </p>
         </Section>
       )}
@@ -294,7 +294,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
             <NumberField label="Weight (kg)" value={a.weightKg} onChange={(v) => set("weightKg", v)} placeholder="62" />
             <NumberField label="Height (cm)" value={a.heightCm} onChange={(v) => set("heightCm", v)} placeholder="165" />
             <div>
-              <label className="mono text-ink-muted text-xs block mb-1.5">sex</label>
+              <label className="section-label block mb-1.5">Sex</label>
               <select
                 value={a.sex}
                 onChange={(e) => set("sex", e.target.value as CalibrationAnswers["sex"])}
@@ -307,7 +307,7 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
             </div>
           </div>
           <p className="text-xs text-ink-muted mt-3">
-            Used with the Mifflin-St Jeor equation — the standard way to estimate daily energy needs.
+            Used with the Mifflin-St Jeor equation, the standard way to estimate daily energy needs.
           </p>
         </Section>
       )}
@@ -331,10 +331,10 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
           />
           {(ctx?.frequentItems.length ?? 0) > 0 && (
             <div className="rounded-xl border border-ink/10 bg-cream-warm p-4">
-              <p className="mono text-ink-muted text-xs mb-1">from your recent swiggy orders</p>
+              <p className="section-label mb-1">From your recent Swiggy orders</p>
               <p className="text-xs text-ink-muted mb-3 leading-relaxed">
                 Tap anything that reliably spikes you, or that always sits well. We
-                can&apos;t tell from an order how it affected your glucose — only you know that.
+                can&apos;t tell from an order how it affected your glucose. Only you know that.
               </p>
               <div className="flex flex-wrap gap-2">
                 {ctx!.frequentItems.map((item) => {
@@ -448,7 +448,7 @@ function NumberField({
 }) {
   return (
     <div>
-      <label className="mono text-ink-muted text-xs block mb-1.5">{label}</label>
+      <label className="section-label block mb-1.5">{label}</label>
       <input
         type="number"
         inputMode="decimal"
@@ -473,7 +473,7 @@ function Choice<T extends string>({
 }) {
   return (
     <div>
-      <label className="mono text-ink-muted text-xs block mb-2">{label}</label>
+      <label className="section-label block mb-2">{label}</label>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
           <button
@@ -505,7 +505,7 @@ function ChipGroup({
 }) {
   return (
     <div>
-      <label className="mono text-ink-muted text-xs block mb-2">{label}</label>
+      <label className="section-label block mb-2">{label}</label>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
           <button
@@ -546,7 +546,7 @@ function FreeList({
 
   return (
     <div>
-      <label className="mono text-ink-muted text-xs block mb-2">{label}</label>
+      <label className="section-label block mb-2">{label}</label>
       <div className="flex gap-2">
         <input
           value={draft}

@@ -113,7 +113,7 @@ export function CartView() {
         <div className="card-solid p-4">
           {cart?.restaurant?.name && (
             <>
-              <p className="mono text-ink-muted text-xs mb-1">from</p>
+              <p className="section-label mb-1">From</p>
               <p className="font-medium">{cart.restaurant.name}</p>
             </>
           )}
@@ -154,7 +154,7 @@ export function CartView() {
       {/* Estimated glucose load — the number no other food app shows */}
       {g && (
         <div className="card-solid p-4">
-          <p className="mono text-ink-muted text-xs mb-3">estimated glucose load</p>
+          <p className="section-label mb-3">Estimated glucose load</p>
           <div className="grid grid-cols-3 gap-2 text-center mb-3">
             <Stat label="carbs" value={`${g.total_carbs_g}g`} />
             <Stat label="kcal" value={g.total_calories} />
@@ -194,13 +194,13 @@ export function CartView() {
           <AlertTriangle size={15} className="text-swiggy-text shrink-0 mt-0.5" />
           <span>
             This is a real cart on your Swiggy account, built through their API. GlycoCart
-            doesn&apos;t place orders — Swiggy orders can&apos;t be cancelled from an app, only by
+            doesn&apos;t place orders. Swiggy orders can&apos;t be cancelled from an app, only by
             calling their support, so you finish checkout in Swiggy yourself.{" "}
             <strong className="font-medium text-ink">
-              If it doesn&apos;t appear in the Swiggy app, check that the app has the same delivery
-              address selected
+              If it doesn&apos;t appear in the Swiggy app, check that the app has the same
+              delivery address selected.
             </strong>{" "}
-            — carts are per-address.
+            Carts are per-address.
           </span>
         </p>
         <a

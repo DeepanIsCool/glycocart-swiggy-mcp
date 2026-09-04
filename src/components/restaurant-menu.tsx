@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2, Sparkles, ListTree, Leaf } from "lucide-react";
+import { Loader2, ArrowDownWideNarrow, ListTree, Leaf } from "lucide-react";
 import { DishCard, type ScoredItem } from "./dish-card";
 import { cn } from "@/lib/utils";
 
@@ -77,7 +77,7 @@ export function RestaurantMenu({
       const data = await res.json();
       if (data?.conflict === "different_restaurant") {
         setNotice(
-          `Your cart already has items from ${data.current_restaurant}. Swiggy carts hold one restaurant at a time — empty it from the Cart tab first.`
+          `Your cart already has items from ${data.current_restaurant}. Swiggy carts hold one restaurant at a time. Empty it from the Cart tab first.`
         );
         return;
       }
@@ -114,7 +114,7 @@ export function RestaurantMenu({
         <Toggle active={sort === "menu"} onClick={() => setSort("menu")} Icon={ListTree}>
           Menu order
         </Toggle>
-        <Toggle active={sort === "best"} onClick={() => setSort("best")} Icon={Sparkles}>
+        <Toggle active={sort === "best"} onClick={() => setSort("best")} Icon={ArrowDownWideNarrow}>
           Best for you
         </Toggle>
         <Toggle active={vegOnly} onClick={() => setVegOnly(!vegOnly)} Icon={Leaf}>
@@ -149,7 +149,7 @@ export function RestaurantMenu({
         <div className="space-y-6">
           {filtered.map((cat) => (
             <section key={cat.title}>
-              <h2 className="mono text-ink-muted text-xs mb-2.5">{cat.title}</h2>
+              <h2 className="section-label mb-2.5">{cat.title}</h2>
               <div className="space-y-2">
                 {cat.items.map((item, i) => (
                   <DishCard key={`${item.id}-${i}`} item={item} onAddToCart={addToCart} showMenuLink={false} />
@@ -183,7 +183,7 @@ function Toggle({
 }: {
   active: boolean;
   onClick: () => void;
-  Icon: typeof Sparkles;
+  Icon: typeof ListTree;
   children: React.ReactNode;
 }) {
   return (

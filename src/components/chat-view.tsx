@@ -2,7 +2,7 @@
 
 import { useChat } from "ai/react";
 import { useEffect, useRef, useState } from "react";
-import { Send, Sparkles, Loader2, ArrowDown, SquarePen, PanelLeft } from "lucide-react";
+import { Send, Loader2, ArrowDown, SquarePen, PanelLeft } from "lucide-react";
 import { DishCard, type ScoredItem } from "./dish-card";
 import {
   RestaurantCard,
@@ -71,7 +71,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       const data = await res.json();
       if (data?.conflict === "different_restaurant") {
         setCartNotice(
-          `Your cart already has items from ${data.current_restaurant}. Swiggy carts hold one restaurant at a time — empty it from the Cart tab to start a new one.`
+          `Your cart already has items from ${data.current_restaurant}. Swiggy carts hold one restaurant at a time. Empty it from the Cart tab to start a new one.`
         );
         return;
       }
@@ -406,7 +406,6 @@ function EmptyState({ profile }: { profile: ProfileView }) {
       </Link>
 
       <p className="text-xs text-ink-muted max-w-xs mx-auto mt-5 leading-relaxed">
-        <Sparkles size={11} className="inline mr-1 -mt-0.5" />
         Live from your Swiggy account. Glucose figures are estimates, not medical advice.
       </p>
     </div>

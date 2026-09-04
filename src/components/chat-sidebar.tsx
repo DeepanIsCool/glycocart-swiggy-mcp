@@ -57,7 +57,7 @@ export function ChatSidebar({
   const list = (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-3 border-b border-ink/8">
-        <span className="mono text-ink-muted text-xs">chats</span>
+        <span className="section-label">Chats</span>
         <div className="flex items-center gap-1">
           <button
             type="button"

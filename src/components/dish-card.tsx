@@ -212,7 +212,7 @@ export function DishCard({
                 {g.estimate_confidence === "archetype" && (
                   <span className="text-ink-muted">
                     {" "}
-                    — a category average, so it may differ from this kitchen&apos;s recipe.
+                    , a category average, so it may differ from this kitchen&apos;s recipe.
                   </span>
                 )}
               </p>
@@ -245,7 +245,7 @@ export function DishCard({
           {onAddToCart && !item.restaurant_id && !outOfStock && (
             <p className="text-xs text-ink-muted mt-3">
               Swiggy didn&apos;t return a restaurant for this result, so it can&apos;t be added
-              from here — open the restaurant to add it.
+              from here. Open the restaurant to add it.
             </p>
           )}
         </div>

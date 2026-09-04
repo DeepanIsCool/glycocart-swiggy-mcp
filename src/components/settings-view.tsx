@@ -97,7 +97,7 @@ export function SettingsView({
     <div className="max-w-2xl mx-auto space-y-4">
       {/* Delivery address */}
       <section className="card-solid p-5">
-        <h2 className="mono text-ink-muted text-xs mb-3">delivery address</h2>
+        <h2 className="section-label mb-3">Delivery address</h2>
 
         {addresses === null && (
           <p className="flex items-center gap-2 text-sm text-ink-muted">
@@ -107,7 +107,7 @@ export function SettingsView({
 
         {addresses?.length === 0 && (
           <p className="text-sm text-ink-soft leading-relaxed">
-            No saved addresses on your Swiggy account. Add one in the Swiggy app —
+            No saved addresses on your Swiggy account. Add one in the Swiggy app;
             restaurant search needs a delivery address.
           </p>
         )}
@@ -129,7 +129,7 @@ export function SettingsView({
               <MapPin size={15} className="text-ink-muted mt-0.5 shrink-0" />
               <span className="min-w-0 flex-1">
                 {(addr.tag || addr.category) && (
-                  <span className="mono text-ink-muted text-xs block mb-0.5">
+                  <span className="section-label block mb-0.5">
                     {[addr.tag, addr.category].filter(Boolean).join(" · ")}
                   </span>
                 )}
@@ -148,7 +148,7 @@ export function SettingsView({
 
       {/* Swiggy connection */}
       <section className="card-solid p-5">
-        <h2 className="mono text-ink-muted text-xs mb-3">swiggy account</h2>
+        <h2 className="section-label mb-3">Swiggy account</h2>
         <p className="text-sm text-ink-soft leading-relaxed mb-4">
           {currentAddressLabel
             ? "Connected. Restaurants, menus and prices come from your own Swiggy account."
@@ -161,7 +161,7 @@ export function SettingsView({
 
       {/* Account */}
       <section className="card-solid p-5">
-        <h2 className="mono text-ink-muted text-xs mb-3">account</h2>
+        <h2 className="section-label mb-3">Account</h2>
         <button
           type="button"
           onClick={signOut}
@@ -175,10 +175,10 @@ export function SettingsView({
 
       {/* Data deletion */}
       <section className="rounded-2xl border border-ember/30 bg-ember-soft/15 p-5">
-        <h2 className="mono text-ember-text text-xs mb-3">delete my data</h2>
+        <h2 className="text-xs font-medium text-ember-text mb-3">Delete my data</h2>
         <p className="text-sm text-ink-soft leading-relaxed mb-4">
-          Permanently deletes your profile — condition, numbers, food preferences and
-          saved address — and signs you out. Your Swiggy account and order history are
+          Permanently deletes your profile (condition, numbers, food preferences and
+          saved address) and signs you out. Your Swiggy account and order history are
           not affected. This cannot be undone.
         </p>
 
@@ -214,11 +214,11 @@ export function SettingsView({
       {/* The standing disclaimer. It used to sit under the chat composer on every
           screenful; this is where a permanent statement actually belongs. */}
       <section className="card-solid p-5">
-        <h2 className="mono text-ink-muted text-xs mb-3">about</h2>
+        <h2 className="section-label mb-3">About</h2>
         <p className="text-sm text-ink-soft leading-relaxed">
           Restaurants, menus, prices and orders are live from your own Swiggy account
           through Swiggy&apos;s MCP. Glucose figures are estimates from dish names matched
-          against Indian food composition tables — Swiggy publishes no per-dish nutrition.
+          against Indian food composition tables. Swiggy publishes no per-dish nutrition.
           GlycoCart is not medical advice and does not place orders or book tables.
         </p>
       </section>
@@ -285,15 +285,15 @@ function AiSection() {
 
   return (
     <section className="card-solid p-5">
-      <h2 className="mono text-ink-muted text-xs mb-1">model</h2>
+      <h2 className="section-label mb-1">Model</h2>
       <p className="text-sm text-ink-muted leading-relaxed mb-4">
         GlycoCart runs on {DEFAULT_MODEL_LABEL} by default. Bring your own key to use a
-        different one — it stays in this browser and is only sent to the provider you pick.
+        different one. It stays in this browser and is only sent to the provider you pick.
       </p>
 
       <div className="space-y-3">
         <label className="block">
-          <span className="mono text-ink-muted text-xs">provider</span>
+          <span className="section-label">Provider</span>
           <select
             value={ai.provider}
             onChange={(e) => update({ provider: e.target.value as Provider, model: "" })}
@@ -305,7 +305,7 @@ function AiSection() {
         </label>
 
         <label className="block">
-          <span className="mono text-ink-muted text-xs">model</span>
+          <span className="section-label">Model</span>
           <ModelCombobox
             models={models}
             value={ai.model}
@@ -315,7 +315,7 @@ function AiSection() {
         </label>
 
         <label className="block">
-          <span className="mono text-ink-muted text-xs">api key (optional)</span>
+          <span className="section-label">API key (optional)</span>
           <span className="relative mt-1.5 block">
             <input
               type={showKey ? "text" : "password"}

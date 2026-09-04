@@ -17,8 +17,10 @@ export default async function DineoutPage() {
       <main className="app-scroll px-5 md:px-10 py-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-6">
-            <p className="mono text-ink-muted text-xs mb-1">swiggy dineout</p>
             <h1 className="display text-4xl leading-tight">Eating out</h1>
+            <p className="text-ink-muted text-sm mt-1">
+              Tables you can book on Swiggy Dineout, with a read on what to order there.
+            </p>
           </div>
           <DineoutView addressLabel={profile.defaultAddressLabel} />
         </div>

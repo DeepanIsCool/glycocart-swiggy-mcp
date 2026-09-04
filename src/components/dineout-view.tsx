@@ -51,7 +51,7 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cuisine, place or vibe — 'rooftop', 'Italian'"
+            placeholder="Cuisine, place or vibe: 'rooftop', 'Italian'"
             className="bg-transparent border-none outline-none text-sm flex-1 min-w-0"
           />
         </div>
@@ -101,7 +101,7 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
           <UtensilsCrossed size={26} className="mx-auto text-ink-muted mb-3" />
           <p className="font-medium mb-1">Find a table you can actually eat at</p>
           <p className="text-sm text-ink-muted leading-relaxed">
-            Search a cuisine or a vibe. Each result opens an ordering brief — which typical dishes
+            Search a cuisine or a vibe. Each result opens an ordering brief: which typical dishes
             of that cuisine sit easiest with your profile, and which spike hardest.
           </p>
         </div>
@@ -109,7 +109,7 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
 
       {results?.length === 0 && (
         <p className="text-sm text-ink-muted">
-          Nothing matched &ldquo;{query}&rdquo;. Try a broader term — a cuisine rather than a dish.
+          Nothing matched &ldquo;{query}&rdquo;. Try a broader term, a cuisine rather than a dish.
         </p>
       )}
 
@@ -122,7 +122,7 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
       {results && results.length > 0 && (
         <p className="text-xs text-ink-muted leading-relaxed mt-5">
           Briefs are estimates for typical dishes of each cuisine, not this kitchen&apos;s recipes.
-          GlycoCart doesn&apos;t book tables — Swiggy&apos;s live booking API exposes no cancel, so
+          GlycoCart doesn&apos;t book tables. Swiggy&apos;s live booking API exposes no cancel, so
           you book in the Swiggy app and keep control of the reservation.
         </p>
       )}

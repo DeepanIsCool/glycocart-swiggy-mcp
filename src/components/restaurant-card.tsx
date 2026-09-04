@@ -180,7 +180,7 @@ export function DineoutCard({ r }: { r: DineoutRestaurantView }) {
               menu, so we brief the cuisine against this user's own model. */}
           {r.brief ? (
             <div className="rounded-xl bg-cream p-3">
-              <p className="mono text-ink-muted text-xs mb-2.5">what to order here</p>
+              <p className="section-label mb-2.5">What to order here</p>
               <BriefRow label="easier on you" items={r.brief.easier} tone="leaf" />
               <BriefRow label="hits hardest" items={r.brief.harder} tone="ember" />
               <p className="text-xs text-ink-muted leading-relaxed mt-2.5">{r.brief.note}</p>
@@ -188,12 +188,12 @@ export function DineoutCard({ r }: { r: DineoutRestaurantView }) {
           ) : (
             <p className="text-xs text-ink-muted leading-relaxed">
               We don&apos;t have typical dishes for this cuisine, so there&apos;s no ordering
-              brief — we&apos;d rather say nothing than guess.
+              brief. We&apos;d rather say nothing than guess.
             </p>
           )}
 
           <p className="text-xs text-ink-muted leading-relaxed">
-            GlycoCart doesn&apos;t book tables — Swiggy&apos;s live booking API has no cancel,
+            GlycoCart doesn&apos;t book tables. Swiggy&apos;s live booking API has no cancel,
             so you book in the Swiggy app and keep control of it.
           </p>
         </div>
@@ -214,7 +214,7 @@ function BriefRow({
   if (items.length === 0) return null;
   return (
     <div className="mb-2 last:mb-0">
-      <p className="mono text-ink-muted text-xs mb-1.5">{label}</p>
+      <p className="section-label mb-1.5">{label}</p>
       <ul className="space-y-1">
         {items.map((i) => (
           <li key={i.name} className="flex items-center justify-between gap-3 text-sm">

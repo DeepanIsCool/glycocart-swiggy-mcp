@@ -22,7 +22,7 @@ export default async function RestaurantPage({ params }: { params: Promise<{ id:
   let error: string | null = null;
 
   if (!profile.defaultAddressId) {
-    error = "Pick a delivery address in Settings — a menu depends on where it's delivering.";
+    error = "Pick a delivery address in Settings. A menu depends on where it's delivering.";
   } else {
     const client = await getSwiggyClient();
     if (!client) {
@@ -106,7 +106,7 @@ export default async function RestaurantPage({ params }: { params: Promise<{ id:
           {menu && (
             <p className="text-xs text-ink-muted leading-relaxed mt-6">
               Glucose figures are estimates from dish names matched against Indian food composition
-              tables — Swiggy publishes no per-dish nutrition. Items we can&apos;t recognise are
+              tables. Swiggy publishes no per-dish nutrition, so items we can&apos;t recognise are
               marked unscored rather than guessed.
             </p>
           )}

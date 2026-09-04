@@ -115,8 +115,19 @@
   /* Scrolling page: reserve room so the last element clears the tab bar. */
   .app-scroll { min-height: calc(100dvh - var(--nav-h)); padding-bottom: 1.5rem; }
   /* 13px floor with looser-but-not-extreme tracking. The previous 0.14em on
-     uppercase micro-text measurably hurt legibility. */
+     uppercase micro-text measurably hurt legibility.
+     Reserved for genuinely technical strings: tool names, argument dumps,
+     model ids, unit labels under a number. */
   .mono { @apply font-mono text-[0.8125rem] uppercase tracking-[0.08em]; }
+  /*
+   * Section header inside a card or a form group.
+   *
+   * These were all `.mono`, so every card wore a tiny ALL-CAPS label — the
+   * signature of a generated landing page, and four of them stacked on the
+   * Settings screen alone. Sentence case in the UI font is what iOS and
+   * Material both use for a group header, and it reads faster.
+   */
+  .section-label { @apply text-xs font-medium text-ink-muted; }
   .card {
     @apply bg-cream-warm/60 border border-ink/10 rounded-2xl backdrop-blur-sm;
     box-shadow: var(--card-shadow);
