@@ -2,10 +2,7 @@
 
 import { useChat } from "ai/react";
 import { useEffect, useRef, useState } from "react";
-import {
-  Send, Sparkles, Settings2, ChevronDown, Search, Info, Eye, EyeOff,
-  CheckCircle2, XCircle, Loader2, ArrowDown
-} from "lucide-react";
+import { Send, Sparkles, Loader2, ArrowDown, SquarePen, PanelLeft } from "lucide-react";
 import { DishCard, type ScoredItem } from "./dish-card";
 import {
   RestaurantCard,
@@ -14,9 +11,10 @@ import {
   type DineoutRestaurantView
 } from "./restaurant-card";
 import { ToolCallCard } from "./tool-call-card";
-import { ChatSidebar, ChatHistoryButton } from "./chat-sidebar";
+import { ChatSidebar } from "./chat-sidebar";
+import { loadAiSettings, CHANGED, keyLooksValid, type AiSettings, DEFAULTS } from "@/lib/ai-settings";
 import { cn } from "@/lib/utils";
-import Image from "next/image";
+import Link from "next/link";
 
 /** Display-safe slice of the user's profile — the metabolic model stays server-side. */
 export interface ProfileView {
@@ -28,27 +26,20 @@ export interface ProfileView {
   defaultAddressId?: string;
 }
 
-/** Mirrors the server-side default in /api/chat so the UI names what's actually running. */
-const DEFAULT_MODEL_LABEL = "nemotron-3-ultra-550b (default)";
-
-const SUGGESTED_PROMPTS = [
-  "What's the best lunch I can order near me right now?",
-  "Find biryani near me and tell me which won't spike me",
-  "Show me open restaurants near my home address",
-  "Something high-protein under 500 kcal"
+/** Short enough to read as chips; the full question is what gets sent. */
+const SUGGESTED_PROMPTS: { label: string; prompt: string }[] = [
+  { label: "Best lunch near me", prompt: "What's the best lunch I can order near me right now?" },
+  { label: "Biryani that won't spike me", prompt: "Find biryani near me and tell me which biryani won't spike me" },
+  { label: "High protein, under 500 kcal", prompt: "Something high-protein under 500 kcal" },
+  { label: "Open restaurants nearby", prompt: "Show me open restaurants near my home address" },
+  { label: "A table for tonight", prompt: "Find me somewhere good to eat out tonight" }
 ];
 
 export function ChatView({ profile }: { profile: ProfileView }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const [provider, setProvider] = useState<"openrouter" | "nvidia">("nvidia");
-  const [customModel, setCustomModel] = useState("");
-  const [customApiKey, setCustomApiKey] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [keyStatus, setKeyStatus] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
-  const [availableModels, setAvailableModels] = useState<any[]>([]);
-  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  // Model choice lives in Settings now; the chat just reads it.
+  const [ai, setAi] = useState<AiSettings>(DEFAULTS);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [cartNotice, setCartNotice] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -97,7 +88,12 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   const { messages, input, handleInputChange, isLoading, append, setInput, error, setMessages } =
     useChat({
       api: "/api/chat",
-      body: { provider, customModel, customApiKey, sessionId }
+      body: {
+        provider: ai.provider,
+        customModel: ai.model,
+        customApiKey: ai.apiKey,
+        sessionId
+      }
     });
 
   /** Create the session lazily on first send, so empty chats never persist. */
@@ -149,16 +145,9 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   }
 
   const validateApiKey = () => {
-    if (!customApiKey.trim()) return true;
-    if (provider === "nvidia" && !customApiKey.startsWith("nvapi-")) {
-      setShowSettings(true);
-      return false;
-    }
-    if (provider === "openrouter" && !customApiKey.startsWith("sk-or-v1-")) {
-      setShowSettings(true);
-      return false;
-    }
-    return true;
+    if (keyLooksValid(ai.provider, ai.apiKey)) return true;
+    setCartNotice(`That API key doesn't look like a ${ai.provider} key. Fix it in Settings.`);
+    return false;
   };
 
   const handleChatSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -180,42 +169,17 @@ export function ChatView({ profile }: { profile: ProfileView }) {
     append({ role: "user", content: p }, { body: { sessionId: id } });
   };
 
+  // Settings can change in another tab, or on the Settings screen itself.
   useEffect(() => {
-    async function fetchModels() {
-      if (!showSettings) return;
-      if (customApiKey) {
-        if (provider === "nvidia" && !customApiKey.startsWith("nvapi-")) return setKeyStatus("invalid");
-        if (provider === "openrouter" && !customApiKey.startsWith("sk-or-v1-")) return setKeyStatus("invalid");
-      } else {
-        setKeyStatus("idle");
-      }
-
-      setIsLoadingModels(true);
-      if (customApiKey) setKeyStatus("checking");
-      try {
-        const res = await fetch("/api/models", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider, customApiKey })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.models)) {
-            setAvailableModels(data.models);
-            if (customApiKey) setKeyStatus("valid");
-          }
-        } else if (customApiKey) {
-          setKeyStatus("invalid");
-        }
-      } catch {
-        if (customApiKey) setKeyStatus("invalid");
-      } finally {
-        setIsLoadingModels(false);
-      }
-    }
-    const t = setTimeout(fetchModels, 500);
-    return () => clearTimeout(t);
-  }, [provider, customApiKey, showSettings]);
+    const sync = () => setAi(loadAiSettings());
+    sync();
+    window.addEventListener(CHANGED, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(CHANGED, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -243,81 +207,45 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       {/* min-w-0: a flex child defaults to min-width:auto, so one wide tool-call
           line made the entire chat column wider than the phone screen. */}
       <div className="flex flex-col flex-1 min-h-0 min-w-0">
-      {/* Profile context bar */}
-      <div className="px-5 md:px-10 py-4 bg-leaf-pale/40 border-b border-ink/8 relative z-20 shrink-0">
-        <div className="max-w-3xl mx-auto flex items-center justify-between text-xs gap-4 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap min-w-0">
-            <ChatHistoryButton onClick={() => setSidebarOpen(true)} />
-            <ContextChip label="condition" value={profile.conditionLabel} />
-            <ContextChip label="target" value={`${profile.dailyCalTarget} kcal/day`} />
-            {profile.blocklist.length > 0 && (
-              <ContextChip label="avoid" value={profile.blocklist.slice(0, 2).join(", ")} />
-            )}
-          </div>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="text-ink-muted hover:text-ink transition-colors p-2 -m-2 shrink-0"
-            aria-label="AI settings"
-          >
-            <Settings2 size={16} />
-          </button>
-        </div>
+      {/*
+        * App bar. One navigation control per side, a wordmark in the middle,
+        * nothing else. It replaced a four-row header that carried the profile
+        * summary, an avoid-list and a gear that expanded a provider/model/API-key
+        * panel over the conversation — all of which belong on Profile and in
+        * Settings, not on top of the task the screen exists for.
+        */}
+      <header className="app-bar">
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="app-bar-action md:invisible"
+          aria-label="Chat history"
+        >
+          <PanelLeft size={19} />
+        </button>
 
-        {showSettings && (
-          <div className="max-w-3xl mx-auto mt-4 p-4 bg-cream-warm border border-ink/10 rounded-xl animate-fade-up">
-            <h4 className="mono text-ink text-[0.8125rem] mb-3">AI Settings (optional)</h4>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <select
-                value={provider}
-                onChange={(e) => setProvider(e.target.value as "openrouter" | "nvidia")}
-                className="bg-cream border border-ink/10 rounded-md px-3 py-1.5 text-xs outline-none focus:border-leaf w-full sm:w-auto"
-              >
-                <option value="nvidia">NVIDIA</option>
-                <option value="openrouter">OpenRouter</option>
-              </select>
-              <ModelCombobox
-                models={availableModels}
-                value={customModel}
-                onChange={setCustomModel}
-                isLoading={isLoadingModels}
-              />
-              <div className="relative flex-1">
-                <input
-                  type={showApiKey ? "text" : "password"}
-                  placeholder="Your own API key (optional)"
-                  value={customApiKey}
-                  onChange={(e) => setCustomApiKey(e.target.value)}
-                  className={cn(
-                    "bg-cream border rounded-md pl-3 pr-16 py-1.5 text-xs w-full outline-none transition-colors",
-                    keyStatus === "valid" ? "border-leaf bg-leaf-pale/20" :
-                    keyStatus === "invalid" ? "border-red-400 bg-red-50" :
-                    "border-ink/10 focus:border-leaf"
-                  )}
-                />
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                  {keyStatus === "checking" && <Loader2 size={14} className="text-leaf animate-spin" />}
-                  {keyStatus === "valid" && <CheckCircle2 size={14} className="text-leaf" />}
-                  {keyStatus === "invalid" && <XCircle size={14} className="text-red-500" />}
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="text-ink-muted hover:text-ink transition-colors"
-                    aria-label={showApiKey ? "Hide API key" : "Show API key"}
-                  >
-                    {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+        <span className="display text-lg select-none">GlycoCart</span>
+
+        <button
+          type="button"
+          onClick={newChat}
+          className="app-bar-action"
+          aria-label="New chat"
+        >
+          <SquarePen size={19} />
+        </button>
+      </header>
 
       {/* Messages */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto overflow-x-hidden px-5 md:px-10 pt-6 pb-4 min-h-0 relative"
+        className={cn(
+          "flex-1 overflow-y-auto overflow-x-hidden px-5 md:px-10 pt-6 pb-4 min-h-0 relative",
+          // An empty conversation centres, rather than hugging the app bar with
+          // a screen of dead space beneath it.
+          empty && "flex flex-col justify-center"
+        )}
       >
         <div className="max-w-3xl mx-auto space-y-5 min-w-0">
           {empty && <EmptyState profile={profile} />}
@@ -408,20 +336,21 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       )}
 
       {empty && (
-        <div className="px-5 md:px-10 pb-4 pt-2 border-t border-ink/5">
-          <div className="max-w-3xl mx-auto">
-            <p className="mono text-ink-muted text-xs mb-2">try one of these</p>
-            <div className="flex gap-2 flex-wrap">
-              {SUGGESTED_PROMPTS.map((p) => (
-                <button
-                  key={p}
-                  onClick={() => handleSuggestedPrompt(p)}
-                  className="text-xs px-3 py-2 rounded-full bg-cream-warm border border-ink/10 hover:bg-cream-deep transition-colors text-left"
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
+        <div className="pt-2 pb-3">
+          <div
+            className="max-w-3xl mx-auto flex gap-2 overflow-x-auto px-5 md:px-10 pb-1
+            [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {SUGGESTED_PROMPTS.map(({ label, prompt }) => (
+              <button
+                key={label}
+                onClick={() => handleSuggestedPrompt(prompt)}
+                className="shrink-0 text-sm px-4 py-2.5 rounded-full bg-cream-warm border border-ink/10
+                hover:bg-cream-deep active:scale-[0.98] transition-all whitespace-nowrap"
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -431,7 +360,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
           <input
             value={input}
             onChange={handleInputChange}
-            placeholder="Ask GlycoCart to find something to eat…"
+            placeholder="Ask for something to eat…"
             disabled={isLoading}
             className="flex-1 bg-cream-warm rounded-full px-5 py-3 text-sm border border-ink/10 focus:outline-none focus:border-leaf transition-colors"
           />
@@ -439,42 +368,46 @@ export function ChatView({ profile }: { profile: ProfileView }) {
             <Send size={14} />
           </button>
         </div>
-        <p className="mono text-xs text-ink-muted text-center mt-3">
-          live swiggy mcp · glucose figures are estimates · not medical advice
-        </p>
       </form>
       </div>
     </div>
   );
 }
 
-function ContextChip({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="inline-flex gap-1.5 items-baseline">
-      <span className="mono text-ink-muted text-[0.8125rem]">{label}</span>
-      <span className="text-ink-soft">{value}</span>
-    </span>
-  );
-}
-
+/**
+ * The one place the profile summary and the disclaimer belong: seen once, when
+ * the screen is otherwise empty, instead of framing every message forever.
+ */
 function EmptyState({ profile }: { profile: ProfileView }) {
   return (
-    <div className="text-center py-6 sm:py-12 animate-fade-up">
-      <Image
-        src="/glycocart_logo.png"
-        alt="GlycoCart"
-        width={64}
-        height={64}
-        className="mx-auto mb-4 rounded-full shadow-md"
-      />
-      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-leaf-pale text-leaf-text text-xs mb-4">
-        <Sparkles size={12} />
-        <span className="mono">live swiggy mcp · your account</span>
-      </div>
+    <div className="text-center py-6 sm:py-10 animate-fade-up">
       <h2 className="display text-2xl sm:text-3xl mb-2">Hi {profile.displayName}.</h2>
-      <p className="text-ink-muted max-w-md mx-auto leading-relaxed text-sm sm:text-base">
-        Your profile is loaded — baseline {profile.fastingBaseline} mg/dL. Ask me to find
-        food near you and I&apos;ll estimate what each dish does to your glucose.
+      <p className="text-ink-muted max-w-sm mx-auto leading-relaxed text-sm">
+        Ask me to find food near you and I&apos;ll estimate what each dish does to your
+        glucose.
+      </p>
+
+      <Link
+        href="/profile"
+        className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-5 rounded-full
+        border border-ink/10 bg-cream-warm px-4 py-2 text-xs text-ink-soft hover:bg-cream-deep transition-colors"
+      >
+        <span>{profile.conditionLabel}</span>
+        <span className="text-ink-muted">·</span>
+        <span>baseline {profile.fastingBaseline} mg/dL</span>
+        <span className="text-ink-muted">·</span>
+        <span>{profile.dailyCalTarget} kcal</span>
+        {profile.blocklist.length > 0 && (
+          <>
+            <span className="text-ink-muted">·</span>
+            <span className="text-ink-muted">avoiding {profile.blocklist.slice(0, 2).join(", ")}</span>
+          </>
+        )}
+      </Link>
+
+      <p className="text-xs text-ink-muted max-w-xs mx-auto mt-5 leading-relaxed">
+        <Sparkles size={11} className="inline mr-1 -mt-0.5" />
+        Live from your Swiggy account. Glucose figures are estimates, not medical advice.
       </p>
     </div>
   );
@@ -597,92 +530,4 @@ function hasEmptyResult(msg: any): boolean {
     }
   }
   return false;
-}
-
-function ModelCombobox({
-  models, value, onChange, isLoading
-}: {
-  models: any[]; value: string; onChange: (val: string) => void; isLoading: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-
-  const filtered = models.filter(
-    (m) =>
-      m.name.toLowerCase().includes(query.toLowerCase()) ||
-      m.id.toLowerCase().includes(query.toLowerCase())
-  );
-  const selectedModel = models.find((m) => m.id === value);
-
-  return (
-    <div className="relative flex-1">
-      <div
-        className="flex items-center gap-2 bg-cream border border-ink/10 rounded-md px-3 py-1.5 text-xs cursor-pointer hover:border-leaf transition-colors h-full"
-        onClick={() => setOpen(!open)}
-      >
-        <div className="flex-1 truncate">
-          {isLoading
-            ? "Loading models…"
-            : selectedModel
-              ? selectedModel.name
-              : value || DEFAULT_MODEL_LABEL}
-        </div>
-        <ChevronDown size={14} className="text-ink-muted shrink-0" />
-      </div>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute top-full mt-1 left-0 w-[min(20rem,calc(100vw-2.5rem))] z-50 bg-cream border border-ink/10 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] overflow-hidden flex flex-col max-h-[300px] animate-fade-up">
-            <div className="p-2 border-b border-ink/5 bg-cream-warm sticky top-0 z-10">
-              <div className="flex items-center gap-2 bg-cream border border-ink/10 rounded px-2 py-1.5 focus-within:border-leaf transition-colors">
-                <Search size={12} className="text-ink-muted" />
-                <input
-                  autoFocus
-                  className="bg-transparent border-none outline-none text-xs flex-1"
-                  placeholder="Search models…"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="overflow-y-auto flex-1 p-1">
-              {filtered.map((m) => {
-                const isFree = parseFloat(m.pricing?.prompt) === 0 && parseFloat(m.pricing?.completion) === 0;
-                const ctxK = m.context_length ? `${Math.round(m.context_length / 1000)}K` : "";
-                return (
-                  <div
-                    key={m.id}
-                    onClick={() => { onChange(m.id); setOpen(false); setQuery(""); }}
-                    className={cn(
-                      "flex flex-col gap-1 p-2.5 rounded-lg cursor-pointer transition-colors mb-0.5",
-                      value === m.id ? "bg-leaf-pale/50" : "hover:bg-cream-warm"
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-[0.8125rem] truncate flex-1">{m.name}</span>
-                      {isFree ? (
-                        <span className="text-xs bg-leaf/10 text-leaf px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">Free</span>
-                      ) : (
-                        <span className="text-xs bg-ink/5 text-ink-soft px-1.5 py-0.5 rounded uppercase tracking-wider font-bold flex items-center gap-1">
-                          Paid <Info size={9} className="opacity-60" />
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-ink-muted font-mono leading-none">
-                      <span className="truncate">{m.id}</span>
-                      {ctxK && <span className="shrink-0 bg-ink/5 px-1 py-0.5 rounded">{ctxK}</span>}
-                    </div>
-                  </div>
-                );
-              })}
-              {filtered.length === 0 && (
-                <div className="p-4 text-center text-xs text-ink-muted">No models found</div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
 }

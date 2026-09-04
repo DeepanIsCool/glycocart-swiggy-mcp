@@ -196,9 +196,11 @@ export function DishCard({
               </div>
 
               <div className="bg-cream rounded-xl p-3 mb-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="mono text-ink-muted text-xs">estimated glucose · 3hr</span>
-                  <span className="mono text-ink text-[0.8125rem] font-medium">
+                {/* 13px uppercase mono wrapped both halves onto two lines at
+                    375px. This row is a label, not body copy. */}
+                <div className="flex items-baseline justify-between gap-2 mb-1">
+                  <span className="mono text-ink-muted !text-[0.625rem]">estimated glucose</span>
+                  <span className="mono text-ink !text-[0.6875rem] font-medium whitespace-nowrap">
                     peak {g.predicted_peak_mg_dl} mg/dL
                   </span>
                 </div>

@@ -2,8 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, LogOut, MapPin, RefreshCw, Trash2, AlertTriangle } from "lucide-react";
+import {
+  Check, Loader2, LogOut, MapPin, RefreshCw, Trash2, AlertTriangle,
+  ChevronDown, Search, Eye, EyeOff, CheckCircle2, XCircle, Info
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  loadAiSettings, saveAiSettings, keyLooksValid, DEFAULT_MODEL_LABEL, KEY_PREFIX,
+  type AiSettings, type Provider, DEFAULTS
+} from "@/lib/ai-settings";
 
 interface Address {
   id: string;
@@ -136,6 +143,9 @@ export function SettingsView({
         {notice && <p className="text-sm text-leaf-text mt-3">{notice}</p>}
       </section>
 
+      {/* Model — moved here from a gear inside the chat screen. */}
+      <AiSection />
+
       {/* Swiggy connection */}
       <section className="card-solid p-5">
         <h2 className="mono text-ink-muted text-xs mb-3">swiggy account</h2>
@@ -189,7 +199,7 @@ export function SettingsView({
               type="button"
               onClick={deleteEverything}
               disabled={busy !== null}
-              className="inline-flex items-center gap-2 rounded-full bg-ember text-cream px-4 py-2 text-sm font-medium disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-full bg-ember text-on-accent px-4 py-2 text-sm font-medium disabled:opacity-60"
             >
               {busy === "delete" ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
               yes, delete everything
@@ -201,7 +211,229 @@ export function SettingsView({
         )}
       </section>
 
+      {/* The standing disclaimer. It used to sit under the chat composer on every
+          screenful; this is where a permanent statement actually belongs. */}
+      <section className="card-solid p-5">
+        <h2 className="mono text-ink-muted text-xs mb-3">about</h2>
+        <p className="text-sm text-ink-soft leading-relaxed">
+          Restaurants, menus, prices and orders are live from your own Swiggy account
+          through Swiggy&apos;s MCP. Glucose figures are estimates from dish names matched
+          against Indian food composition tables — Swiggy publishes no per-dish nutrition.
+          GlycoCart is not medical advice and does not place orders or book tables.
+        </p>
+      </section>
+
       {error && <p className="text-sm text-ember-text">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * Bring-your-own-key model settings.
+ *
+ * Lives here, not in the chat: "Put general, infrequently changed settings in
+ * your custom settings area" (Apple HIG, Settings).
+ */
+function AiSection() {
+  const [ai, setAi] = useState<AiSettings>(DEFAULTS);
+  const [showKey, setShowKey] = useState(false);
+  const [models, setModels] = useState<any[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [keyStatus, setKeyStatus] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
+
+  useEffect(() => setAi(loadAiSettings()), []);
+
+  function update(patch: Partial<AiSettings>) {
+    const next = { ...ai, ...patch };
+    setAi(next);
+    saveAiSettings(next);
+  }
+
+  useEffect(() => {
+    if (ai.apiKey && !keyLooksValid(ai.provider, ai.apiKey)) {
+      setKeyStatus("invalid");
+      return;
+    }
+    if (!ai.apiKey) setKeyStatus("idle");
+
+    const t = setTimeout(async () => {
+      setLoadingModels(true);
+      if (ai.apiKey) setKeyStatus("checking");
+      try {
+        const res = await fetch("/api/models", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: ai.provider, customApiKey: ai.apiKey })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.models)) {
+            setModels(data.models);
+            if (ai.apiKey) setKeyStatus("valid");
+          }
+        } else if (ai.apiKey) {
+          setKeyStatus("invalid");
+        }
+      } catch {
+        if (ai.apiKey) setKeyStatus("invalid");
+      } finally {
+        setLoadingModels(false);
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [ai.provider, ai.apiKey]);
+
+  return (
+    <section className="card-solid p-5">
+      <h2 className="mono text-ink-muted text-xs mb-1">model</h2>
+      <p className="text-sm text-ink-muted leading-relaxed mb-4">
+        GlycoCart runs on {DEFAULT_MODEL_LABEL} by default. Bring your own key to use a
+        different one — it stays in this browser and is only sent to the provider you pick.
+      </p>
+
+      <div className="space-y-3">
+        <label className="block">
+          <span className="mono text-ink-muted text-xs">provider</span>
+          <select
+            value={ai.provider}
+            onChange={(e) => update({ provider: e.target.value as Provider, model: "" })}
+            className="mt-1.5 w-full bg-cream border border-ink/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-leaf"
+          >
+            <option value="nvidia">NVIDIA</option>
+            <option value="openrouter">OpenRouter</option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mono text-ink-muted text-xs">model</span>
+          <ModelCombobox
+            models={models}
+            value={ai.model}
+            onChange={(model) => update({ model })}
+            isLoading={loadingModels}
+          />
+        </label>
+
+        <label className="block">
+          <span className="mono text-ink-muted text-xs">api key (optional)</span>
+          <span className="relative mt-1.5 block">
+            <input
+              type={showKey ? "text" : "password"}
+              placeholder={KEY_PREFIX[ai.provider] + "…"}
+              value={ai.apiKey}
+              onChange={(e) => update({ apiKey: e.target.value })}
+              className={cn(
+                "bg-cream border rounded-xl pl-3 pr-16 py-2.5 text-sm w-full outline-none transition-colors",
+                keyStatus === "valid"
+                  ? "border-leaf"
+                  : keyStatus === "invalid"
+                    ? "border-ember"
+                    : "border-ink/10 focus:border-leaf"
+              )}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              {keyStatus === "checking" && <Loader2 size={14} className="text-leaf animate-spin" />}
+              {keyStatus === "valid" && <CheckCircle2 size={14} className="text-leaf-text" />}
+              {keyStatus === "invalid" && <XCircle size={14} className="text-ember-text" />}
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="text-ink-muted hover:text-ink transition-colors"
+                aria-label={showKey ? "Hide API key" : "Show API key"}
+              >
+                {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </span>
+          </span>
+          {keyStatus === "invalid" && (
+            <span className="block text-xs text-ember-text mt-1.5">
+              A {ai.provider} key starts with {KEY_PREFIX[ai.provider]}
+            </span>
+          )}
+        </label>
+      </div>
+    </section>
+  );
+}
+
+function ModelCombobox({
+  models, value, onChange, isLoading
+}: {
+  models: any[]; value: string; onChange: (val: string) => void; isLoading: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const filtered = models.filter(
+    (m) =>
+      m.name.toLowerCase().includes(query.toLowerCase()) ||
+      m.id.toLowerCase().includes(query.toLowerCase())
+  );
+  const selected = models.find((m) => m.id === value);
+
+  return (
+    <span className="relative block mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-2 bg-cream border border-ink/10 rounded-xl px-3 py-2.5 text-sm hover:border-leaf transition-colors text-left"
+      >
+        <span className="flex-1 truncate">
+          {isLoading ? "Loading models…" : selected ? selected.name : value || `${DEFAULT_MODEL_LABEL} (default)`}
+        </span>
+        <ChevronDown size={15} className="text-ink-muted shrink-0" />
+      </button>
+
+      {open && (
+        <>
+          <span className="fixed inset-0 z-40 block" onClick={() => setOpen(false)} />
+          <span className="absolute top-full mt-1 left-0 right-0 z-50 bg-cream border border-ink/10 rounded-xl shadow-lg overflow-hidden flex flex-col max-h-72 animate-fade-up">
+            <span className="p-2 border-b border-ink/5 bg-cream-warm block">
+              <span className="flex items-center gap-2 bg-cream border border-ink/10 rounded-lg px-2 py-1.5 focus-within:border-leaf transition-colors">
+                <Search size={13} className="text-ink-muted" />
+                <input
+                  autoFocus
+                  className="bg-transparent border-none outline-none text-sm flex-1 min-w-0"
+                  placeholder="Search models…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </span>
+            </span>
+            <span className="overflow-y-auto flex-1 p-1 block">
+              {filtered.map((m) => {
+                const isFree =
+                  parseFloat(m.pricing?.prompt) === 0 && parseFloat(m.pricing?.completion) === 0;
+                return (
+                  <span
+                    key={m.id}
+                    onClick={() => { onChange(m.id); setOpen(false); setQuery(""); }}
+                    className={cn(
+                      "flex flex-col gap-1 p-2.5 rounded-lg cursor-pointer transition-colors",
+                      value === m.id ? "bg-leaf-pale" : "hover:bg-cream-warm"
+                    )}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sm truncate flex-1">{m.name}</span>
+                      {isFree ? (
+                        <span className="mono text-xs text-leaf-text shrink-0">free</span>
+                      ) : (
+                        <span className="mono text-xs text-ink-muted shrink-0 inline-flex items-center gap-1">
+                          paid <Info size={9} />
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-mono text-xs text-ink-muted truncate">{m.id}</span>
+                  </span>
+                );
+              })}
+              {filtered.length === 0 && (
+                <span className="block p-4 text-center text-sm text-ink-muted">No models found</span>
+              )}
+            </span>
+          </span>
+        </>
+      )}
+    </span>
   );
 }

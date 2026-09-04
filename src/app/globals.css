@@ -6,9 +6,77 @@
 
 :root {
   --grain-opacity: 0.035;
+  --grain-blend: multiply;
   /* Bottom tab bar height, including the iOS home-indicator inset. */
   --nav-h: calc(4.25rem + env(safe-area-inset-bottom));
+  /* Standard mobile app-bar height. 56px is the Material 3 small top app bar
+     and comfortably clears the 44pt minimum touch target on iOS. */
+  --appbar-h: 3.5rem;
+
+  /* Palette. Held as space-separated RGB so Tailwind can apply opacity
+     modifiers (bg-ink/10) to a CSS variable. Contrast-gated by
+     `npm run test:contrast`, in BOTH themes. */
+  --ink: 15 22 20;
+  --ink-soft: 31 42 38;
+  --ink-muted: 70 82 75;
+  --cream: 248 245 239;
+  --cream-warm: 242 237 226;
+  --cream-deep: 234 226 210;
+  --leaf: 14 126 92;
+  --leaf-soft: 127 184 159;
+  --leaf-pale: 216 232 223;
+  --leaf-text: 10 98 71;
+  --ember: 217 97 58;
+  --ember-soft: 242 166 132;
+  --ember-text: 168 62 27;
+  --sage: 183 196 179;
+  --swiggy: 252 128 25;
+  --swiggy-ink: 40 44 63;
+  --swiggy-muted: 104 107 120;
+  --swiggy-text: 160 67 0;
+  /* Label colour for a filled accent button. Fixed in both themes: a light
+     label on Swiggy orange is 2.16:1, so it must never follow `ink`. */
+  --on-accent: 15 22 20;
+  --card-shadow: 0 1px 0 rgb(15 22 20 / 0.04), 0 8px 24px -12px rgb(15 22 20 / 0.08);
 }
+
+/*
+ * Dark theme.
+ *
+ * Not an inversion — a designed warm-dark palette with the same green cast, so
+ * the app keeps its character at night. Without this a browser's force-dark
+ * filter mangles the cream palette into muddy brown, which is exactly how it
+ * rendered on a real phone.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --grain-opacity: 0.05;
+    --grain-blend: overlay;
+
+    --ink: 244 241 233;
+    --ink-soft: 218 214 203;
+    --ink-muted: 160 169 159;
+    --cream: 14 18 17;
+    --cream-warm: 22 27 25;
+    --cream-deep: 31 37 35;
+    --leaf: 47 169 127;
+    --leaf-soft: 44 95 77;
+    --leaf-pale: 22 48 42;
+    --leaf-text: 98 210 166;
+    --ember: 224 113 74;
+    --ember-soft: 122 58 36;
+    --ember-text: 242 163 133;
+    --sage: 110 122 110;
+    --swiggy: 252 128 25;
+    --swiggy-ink: 40 44 63;
+    --swiggy-muted: 154 160 174;
+    --swiggy-text: 255 164 85;
+    --on-accent: 15 22 20;
+    /* Elevation on a dark ground reads as a lighter edge, not a darker shadow. */
+    --card-shadow: 0 1px 0 rgb(255 255 255 / 0.04), 0 8px 24px -14px rgb(0 0 0 / 0.6);
+  }
+}
+
 
 @layer base {
   html {
@@ -39,7 +107,7 @@
     z-index: 1;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/%3E%3C/svg%3E");
     opacity: var(--grain-opacity);
-    mix-blend-mode: multiply;
+    mix-blend-mode: var(--grain-blend);
   }
   .display { @apply font-display tracking-tight; }
   /* Fixed-height page that must not slide under the bottom tab bar. */
@@ -51,23 +119,38 @@
   .mono { @apply font-mono text-[0.8125rem] uppercase tracking-[0.08em]; }
   .card {
     @apply bg-cream-warm/60 border border-ink/10 rounded-2xl backdrop-blur-sm;
-    box-shadow: 0 1px 0 rgba(15, 22, 20, 0.04), 0 8px 24px -12px rgba(15, 22, 20, 0.08);
+    box-shadow: var(--card-shadow);
   }
   /* Opaque variant for content that must stay legible over the grain overlay. */
   .card-solid {
     @apply bg-cream-warm border border-ink/10 rounded-2xl;
-    box-shadow: 0 1px 0 rgba(15, 22, 20, 0.04), 0 8px 24px -12px rgba(15, 22, 20, 0.08);
+    box-shadow: var(--card-shadow);
   }
   /* Brand-orange fill with dark text: keeps Swiggy's #FC8019 while clearing
      WCAG AA at 7.2:1 (white on the same orange is only 2.16:1). */
   .btn-swiggy {
-    @apply inline-flex items-center justify-center gap-2 bg-swiggy text-ink px-6 py-3.5
+    @apply inline-flex items-center justify-center gap-2 bg-swiggy text-on-accent px-6 py-3.5
     rounded-full font-medium transition-all hover:brightness-95 active:scale-[0.98]
     disabled:opacity-50;
   }
   .btn-primary {
     @apply inline-flex items-center gap-2 bg-ink text-cream px-5 py-3 rounded-full font-medium
     transition-all hover:bg-ink-soft active:scale-[0.98] disabled:opacity-50;
+  }
+  /*
+   * Standard mobile app bar: fixed height, title centred, one action per side.
+   * Actions are 44x44 to meet the iOS minimum touch target — the old header
+   * used 16px icons with negative margins, well under it.
+   */
+  .app-bar {
+    @apply sticky top-0 z-20 flex items-center justify-between gap-2 px-2
+    border-b border-ink/10 bg-cream/90 backdrop-blur-md shrink-0;
+    height: var(--appbar-h);
+    padding-top: env(safe-area-inset-top);
+  }
+  .app-bar-action {
+    @apply inline-flex items-center justify-center size-11 rounded-full text-ink-muted
+    hover:text-ink hover:bg-cream-deep/60 active:scale-95 transition-all;
   }
   .btn-ghost {
     @apply inline-flex items-center gap-2 text-ink-muted hover:text-ink px-3 py-2 rounded-full

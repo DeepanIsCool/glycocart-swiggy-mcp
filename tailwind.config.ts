@@ -4,19 +4,41 @@ const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      // Every colour resolves through a CSS variable so the dark theme is one
+      // block in globals.css rather than a `dark:` prefix on every element.
+      // Values are space-separated RGB; the alpha slot keeps `bg-ink/10` working.
       colors: {
-        // Text tokens are contrast-checked against every cream background by
-        // `npm run test:contrast`. Fill variants keep the brand colour; `.text`
-        // variants are darkened so small type still clears WCAG AA — this app's
-        // users have elevated rates of diabetic vision impairment.
-        ink: { DEFAULT: "#0F1614", soft: "#1F2A26", muted: "#46524B" },
-        cream: { DEFAULT: "#F8F5EF", warm: "#F2EDE2", deep: "#EAE2D2" },
-        leaf: { DEFAULT: "#0E7E5C", soft: "#7FB89F", pale: "#D8E8DF", text: "#0A6247" },
-        ember: { DEFAULT: "#D9613A", soft: "#F2A684", text: "#A83E1B" },
-        sage: { DEFAULT: "#B7C4B3" },
-        // Swiggy brand tokens — used where we're explicitly speaking as a
-        // Swiggy MCP integration, not as GlycoCart's own editorial identity.
-        swiggy: { DEFAULT: "#FC8019", ink: "#282C3F", muted: "#686B78", text: "#A04300" }
+        ink: {
+          DEFAULT: "rgb(var(--ink) / <alpha-value>)",
+          soft: "rgb(var(--ink-soft) / <alpha-value>)",
+          muted: "rgb(var(--ink-muted) / <alpha-value>)"
+        },
+        cream: {
+          DEFAULT: "rgb(var(--cream) / <alpha-value>)",
+          warm: "rgb(var(--cream-warm) / <alpha-value>)",
+          deep: "rgb(var(--cream-deep) / <alpha-value>)"
+        },
+        leaf: {
+          DEFAULT: "rgb(var(--leaf) / <alpha-value>)",
+          soft: "rgb(var(--leaf-soft) / <alpha-value>)",
+          pale: "rgb(var(--leaf-pale) / <alpha-value>)",
+          text: "rgb(var(--leaf-text) / <alpha-value>)"
+        },
+        ember: {
+          DEFAULT: "rgb(var(--ember) / <alpha-value>)",
+          soft: "rgb(var(--ember-soft) / <alpha-value>)",
+          text: "rgb(var(--ember-text) / <alpha-value>)"
+        },
+        sage: { DEFAULT: "rgb(var(--sage) / <alpha-value>)" },
+        swiggy: {
+          DEFAULT: "rgb(var(--swiggy) / <alpha-value>)",
+          ink: "rgb(var(--swiggy-ink) / <alpha-value>)",
+          muted: "rgb(var(--swiggy-muted) / <alpha-value>)",
+          text: "rgb(var(--swiggy-text) / <alpha-value>)"
+        },
+        // Label on a filled accent (Swiggy orange, ember). Deliberately does not
+        // follow the theme — a light label on orange is 2.16:1.
+        "on-accent": "rgb(var(--on-accent) / <alpha-value>)"
       },
       fontFamily: {
         display: ["Fraunces", "ui-serif", "Georgia", "serif"],
