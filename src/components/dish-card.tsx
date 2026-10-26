@@ -21,6 +21,10 @@ export interface ScoredItem {
   in_stock?: boolean;
   has_options?: boolean;
   is_bestseller?: boolean;
+  /** Entries from the person's own avoid list that this dish's name matches. */
+  avoid_matches?: string[];
+  /** Their stated diet rules this dish out. */
+  diet_conflict?: boolean;
   glycemic: {
     predicted_peak_mg_dl: number;
     match_score: number;
@@ -183,6 +187,11 @@ export function DishCard({
           {item.is_bestseller && (
             <span className="inline-flex items-center gap-1 mt-1.5 text-xs text-swiggy-text">
               <Flame size={11} aria-hidden /> Bestseller here
+            </span>
+          )}
+          {(item.avoid_matches?.length ?? 0) > 0 && (
+            <span className="block mt-1.5 text-xs text-ember-text">
+              On your avoid list: {item.avoid_matches!.join(", ").toLowerCase()}
             </span>
           )}
         </span>

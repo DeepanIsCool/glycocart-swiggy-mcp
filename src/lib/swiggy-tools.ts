@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { avoidMatches, dietConflict, preferenceRank, wantsVegOnly } from "./preferences";
 import { tool } from "ai";
 import type { Client } from "@modelcontextprotocol/client";
 import { predictGlucoseResponse } from "./glycemic";
@@ -137,7 +138,10 @@ function scoreRealItem(item: RawMenuItem, profile: UserProfile) {
     // Swiggy sends 0/1 as often as a boolean; absent means "assume available".
     in_stock: item.inStock === undefined ? true : Boolean(item.inStock),
     // Variant/addon items have a "from" price that changes at cart time.
-    has_options: Boolean(item.hasVariants || item.hasAddons)
+    has_options: Boolean(item.hasVariants || item.hasAddons),
+    // The person's own onboarding answers, applied to this dish by name.
+    avoid_matches: avoidMatches(item.name, profile.blocklist),
+    diet_conflict: dietConflict(item.isVeg, profile.dietary)
   };
 
   const est = estimateNutrition(item.name, item.description);
@@ -264,7 +268,10 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
         offset: z.coerce.number().optional()
       }),
       execute: async ({ addressId, query, vegFilter, offset }) => {
-        const res = await callSwiggy(client, "search_menu", { addressId, query, vegFilter, offset });
+        // A vegetarian, vegan or Jain profile asks Swiggy for veg dishes only,
+        // unless the agent explicitly asked otherwise.
+        const veg = vegFilter ?? (wantsVegOnly(profile.dietary) ? 1 : undefined);
+        const res = await callSwiggy(client, "search_menu", { addressId, query, vegFilter: veg, offset });
         if (res?.success === false) return res;
 
         const data = unwrapSwiggy<any>(res);
@@ -288,21 +295,20 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
           )
         );
 
-        // Best glycemic fit first; unscoreable items sink to the bottom.
-        scored.sort(
-          (a: any, b: any) => (b.glycemic?.match_score ?? -1) - (a.glycemic?.match_score ?? -1)
-        );
+        // Best glycemic fit first; dishes on their avoid list after the rest;
+        // unscoreable items sink to the bottom.
+        scored.sort((a: any, b: any) => preferenceRank(b) - preferenceRank(a));
 
         const rated = scored.filter((i: any) => i.glycemic);
         const allPoor =
           rated.length > 0 && rated.every((i: any) => i.glycemic.verdict === "poor");
-        const vegOnly = profile.dietary.some((d) => /vegetarian|vegan|jain/i.test(d));
-        const dietConflicts = vegOnly
-          ? scored.filter((i: any) => i.is_veg === false).map((i: any) => i.name)
-          : [];
+        // Dishes their diet rules out are not shown at all; the model is told
+        // how many were left out so it doesn't claim the search came up empty.
+        const dietConflicts = scored.filter((i: any) => i.diet_conflict).map((i: any) => i.name);
+        const shown = scored.filter((i: any) => !i.diet_conflict);
 
         return {
-          items: scored,
+          items: shown,
           total: data?.totalItems,
           // Some Swiggy payloads nest paging under `pagination` (get_addresses
           // does); without this fallback "Load more" never appeared.
@@ -315,8 +321,8 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
             : {}),
           ...(dietConflicts.length
             ? {
-                diet_conflicts: dietConflicts,
-                diet_note: `The user's stated diet (${profile.dietary.join(", ")}) rules these out. Do not recommend them.`
+                diet_excluded: dietConflicts.length,
+                diet_note: `${dietConflicts.length} non-veg result(s) were left out because the user's stated diet (${profile.dietary.join(", ")}) rules them out.`
               }
             : {}),
           scoring_note:

@@ -1,5 +1,5 @@
-import { sqlClient, ensureSchemaReady } from "./db";
 import type { UserProfile } from "./profile";
+import { istDay, parseOrderedAt } from "./order-time";
 
 /**
  * Daily glucose budget.
@@ -42,18 +42,34 @@ export function softCarbCap(profile: UserProfile): number {
   return Math.round((fromCalories * factor) / 5) * 5;
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-export async function getBudget(uid: string, profile: UserProfile): Promise<DailyBudget> {
-  await ensureSchemaReady();
-  const sql = sqlClient();
-  const day = today();
-  const rows = (await sql`select entries from daily_log where user_id = ${uid} and day = ${day}`) as any[];
-  const entries: LogEntry[] = rows[0]?.entries ?? [];
-
-  const consumedCarbs = Math.round(entries.reduce((sum, e) => sum + (Number(e.carbs) || 0), 0));
+/**
+ * Today's budget from the person's actual Swiggy orders.
+ *
+ * Nothing ever wrote the daily log (GlycoCart places no orders, so it never
+ * knew what was eaten), and "today so far" was always empty. Today's orders,
+ * already scored by get_food_orders, are the real record. The day is the
+ * Indian calendar day, not UTC, which rolled over at 05:30. Cancelled orders
+ * and orders whose time can't be read are left out; unscored items add
+ * nothing rather than a guess.
+ */
+export function budgetFromOrders(orders: any[], profile: UserProfile, now: Date = new Date()): DailyBudget {
+  const day = istDay(now);
+  const entries: LogEntry[] = [];
+  for (const o of orders ?? []) {
+    if (/cancel/i.test(String(o?.status ?? ""))) continue;
+    const at = parseOrderedAt(o?.ordered_at);
+    if (!at || istDay(at) !== day) continue;
+    const carbs = Number(o?.glucose?.estimated_carbs_g);
+    if (!Number.isFinite(carbs) || carbs <= 0) continue;
+    const items = Array.isArray(o?.items) && o.items.length ? o.items.join(", ") : "an order";
+    entries.push({
+      name: o?.restaurant ? `${items} from ${o.restaurant}` : items,
+      carbs,
+      peak: Number(o?.glucose?.highest_item_peak_mg_dl) || 0,
+      at: at.toISOString()
+    });
+  }
+  const consumedCarbs = Math.round(entries.reduce((sum, e) => sum + e.carbs, 0));
   const softCapCarbs = softCarbCap(profile);
   return {
     day,
@@ -65,25 +81,11 @@ export async function getBudget(uid: string, profile: UserProfile): Promise<Dail
   };
 }
 
-export async function addEntries(uid: string, newEntries: LogEntry[]): Promise<void> {
-  if (newEntries.length === 0) return;
-  await ensureSchemaReady();
-  const sql = sqlClient();
-  const day = today();
-  await sql`
-    insert into daily_log (user_id, day, entries)
-    values (${uid}, ${day}, ${JSON.stringify(newEntries)}::jsonb)
-    on conflict (user_id, day) do update
-      set entries = daily_log.entries || excluded.entries,
-          updated_at = now()
-  `;
-}
-
 /** One line for the system prompt, so advice accounts for the rest of the day. */
 export function budgetSummary(b: DailyBudget): string {
   if (b.entries.length === 0) {
-    return `Nothing logged today. Rough daily carb allowance ~${b.softCapCarbs}g (estimated from their calorie target).`;
+    return `No Swiggy food orders today that could be estimated. Meals from elsewhere are unknown, so don't assume they haven't eaten. Rough daily carb allowance ~${b.softCapCarbs}g (estimated from their calorie target).`;
   }
   const pct = Math.round(b.usedFraction * 100);
-  return `Logged today: ${b.entries.map((e) => e.name).join(", ")}. Estimated ~${b.consumedCarbs}g carbs of a rough ~${b.softCapCarbs}g allowance (${pct}%), so about ${b.remainingCarbs}g left. These are estimates — use them to steer the next meal, never to tell someone to skip one.`;
+  return `Ordered on Swiggy today: ${b.entries.map((e) => e.name).join("; ")}. Estimated ~${b.consumedCarbs}g carbs of a rough ~${b.softCapCarbs}g allowance (${pct}%), so about ${b.remainingCarbs}g left. These are estimates — use them to steer the next meal, never to tell someone to skip one.`;
 }

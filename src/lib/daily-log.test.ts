@@ -3,7 +3,7 @@
  * Run: npm run test:daily
  */
 import assert from "node:assert";
-import { softCarbCap, budgetSummary, type DailyBudget } from "./daily-log";
+import { softCarbCap, budgetSummary, budgetFromOrders, type DailyBudget } from "./daily-log";
 import type { UserProfile } from "./profile";
 
 const profile = (condition: UserProfile["condition"], dailyCalTarget: number): UserProfile => ({
@@ -60,6 +60,32 @@ assert.match(text, /Pizza/);
 assert.match(text, /149g left/);
 
 const empty = budgetSummary({ ...used, entries: [], consumedCarbs: 0, remainingCarbs: 225, usedFraction: 0 });
-assert.match(empty, /Nothing logged today/);
+assert.match(empty, /No Swiggy food orders today/);
+assert.match(empty, /don't assume they haven't eaten/, "an empty day must not read as an empty stomach");
+
+// Today's budget comes from today's real orders, in Indian time.
+{
+  const p = profile("general", 2000);
+  // 23:00 UTC on the 29th is 04:30 IST on the 30th.
+  const now = new Date("2026-08-29T23:00:00Z");
+  const orders = [
+    // 00:30 IST on the 30th: today in India, though still the 29th in UTC.
+    { ordered_at: "2026-08-30 00:30:00", status: "DELIVERED", restaurant: "Meghana", items: ["Biryani"], glucose: { estimated_carbs_g: 80, highest_item_peak_mg_dl: 160 } },
+    // Yesterday in India.
+    { ordered_at: "2026-08-29 21:00:00", status: "DELIVERED", items: ["Pizza"], glucose: { estimated_carbs_g: 90 } },
+    // Cancelled orders weren't eaten.
+    { ordered_at: "2026-08-30 01:00:00", status: "CANCELLED", items: ["Cake"], glucose: { estimated_carbs_g: 60 } },
+    // Unscored: adds nothing rather than a guess.
+    { ordered_at: "2026-08-30 02:00:00", status: "DELIVERED", items: ["Mystery"], glucose: null },
+    // Unreadable time: left out.
+    { ordered_at: "sometime", status: "DELIVERED", items: ["Dal"], glucose: { estimated_carbs_g: 30 } }
+  ];
+  const b = budgetFromOrders(orders, p, now);
+  assert.equal(b.day, "2026-08-30", "the day is the IST day");
+  assert.equal(b.consumedCarbs, 80);
+  assert.equal(b.entries.length, 1);
+  assert.match(b.entries[0].name, /Biryani from Meghana/);
+  assert.match(budgetSummary(b), /Ordered on Swiggy today: Biryani from Meghana/);
+}
 
 console.log("daily-log: all checks passed");

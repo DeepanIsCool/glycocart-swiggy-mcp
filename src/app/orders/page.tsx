@@ -4,6 +4,7 @@ import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
 import { RecoverIfExpired } from "@/components/session-recovery";
+import { parseOrderedAt } from "@/lib/order-time";
 import { buildOrderTools } from "@/lib/orders-tools";
 import { BottomNav } from "@/components/bottom-nav";
 import { formatINR } from "@/lib/utils";
@@ -18,22 +19,8 @@ type LoadError = { message: string; action: "address" | "reconnect" | "retry" };
  * Swiggy order is in India and this renders on a server whose clock is UTC.
  */
 function formatOrderedAt(raw: unknown): string | null {
-  if (raw == null || raw === "") return null;
-  let d: Date;
-  if (typeof raw === "number" || (typeof raw === "string" && /^\d+$/.test(raw))) {
-    const n = Number(raw);
-    d = new Date(n < 1e12 ? n * 1000 : n);
-  } else if (typeof raw === "string") {
-    d = new Date(raw);
-    // A string with no zone parses in the server's zone (UTC on Vercel), which
-    // put every order 5h30m late. Swiggy's times are Indian: read it as IST.
-    if (!Number.isNaN(d.getTime()) && !/(z|gmt|utc|[+-]\d{2}:?\d{2})\s*$/i.test(raw.trim())) {
-      d = new Date(d.getTime() - d.getTimezoneOffset() * 60_000 - 330 * 60_000);
-    }
-  } else {
-    return null;
-  }
-  if (Number.isNaN(d.getTime())) return typeof raw === "string" ? raw : null;
+  const d = parseOrderedAt(raw);
+  if (!d) return typeof raw === "string" && raw.trim() ? raw : null;
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
     month: "short",

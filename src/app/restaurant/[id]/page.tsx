@@ -4,6 +4,7 @@ import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
 import { RecoverIfExpired } from "@/components/session-recovery";
+import { wantsVegOnly } from "@/lib/preferences";
 import { buildSwiggyTools } from "@/lib/swiggy-tools";
 import { BottomNav } from "@/components/bottom-nav";
 import { RestaurantMenu } from "@/components/restaurant-menu";
@@ -126,6 +127,7 @@ export default async function RestaurantPage({ params }: { params: Promise<{ id:
                 hasMore={Boolean(menu.has_more)}
                 totalCategories={typeof menu.total_categories === "number" ? menu.total_categories : undefined}
                 addressMissing={!profile.defaultAddressId}
+                defaultVegOnly={wantsVegOnly(profile.dietary)}
               />
             )}
           </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { preferenceRank } from "@/lib/preferences";
 import { useChat } from "ai/react";
 import { useEffect, useId, useRef, useState } from "react";
 import { ArrowUp, ArrowDown, Square, SquarePen, PanelLeft, RotateCw, X } from "lucide-react";
@@ -884,10 +885,11 @@ function extractScoredItems(msg: any): ScoredItem[] {
   }
   // Menus arrive in Swiggy's order, not ranked, yet the cards are numbered
   // 1 to 5 as best fit first. Rank by this person's match score.
-  const scored = out
-    .filter((i) => i?.glycemic)
-    .sort((a: any, b: any) => (b.glycemic?.match_score ?? 0) - (a.glycemic?.match_score ?? 0));
-  const unscored = out.filter((i) => i && !i.glycemic);
+  // Their diet rules some dishes out entirely; avoid-list matches rank below
+  // every clean dish (preferenceRank).
+  const allowed = out.filter((i) => i && !i.diet_conflict);
+  const scored = allowed.filter((i) => i.glycemic).sort((a, b) => preferenceRank(b) - preferenceRank(a));
+  const unscored = allowed.filter((i) => !i.glycemic);
   return [...scored, ...unscored].slice(0, 5);
 }
 

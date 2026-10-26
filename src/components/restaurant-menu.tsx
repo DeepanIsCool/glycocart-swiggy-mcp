@@ -1,5 +1,6 @@
 "use client";
 
+import { preferenceRank } from "@/lib/preferences";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Loader2, X } from "lucide-react";
@@ -47,7 +48,8 @@ export function RestaurantMenu({
   initial,
   hasMore,
   totalCategories,
-  addressMissing
+  addressMissing,
+  defaultVegOnly = false
 }: {
   restaurantId: string;
   initial: MenuCategory[];
@@ -55,6 +57,8 @@ export function RestaurantMenu({
   /** Swiggy's count of menu sections, when it sends one. */
   totalCategories?: number;
   addressMissing?: boolean;
+  /** Starts on veg-only for a vegetarian, vegan or Jain profile. */
+  defaultVegOnly?: boolean;
 }) {
   const [categories, setCategories] = useState(initial);
   const [page, setPage] = useState(1);
@@ -62,7 +66,7 @@ export function RestaurantMenu({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sort, setSort] = useState<"menu" | "best">("menu");
-  const [vegOnly, setVegOnly] = useState(false);
+  const [vegOnly, setVegOnly] = useState(defaultVegOnly);
   const [notice, setNotice] = useState<Notice | null>(null);
   const adding = useRef(false);
   const [active, setActive] = useState(0);
@@ -160,7 +164,8 @@ export function RestaurantMenu({
   const ranked = useMemo(() => {
     const all = filtered.flatMap((c) => c.items);
     const scored = all.filter((i) => i.glycemic);
-    scored.sort((a, b) => (b.glycemic!.match_score ?? 0) - (a.glycemic!.match_score ?? 0));
+    // Avoid-list matches rank below every clean dish, whatever their score.
+    scored.sort((a, b) => preferenceRank(b) - preferenceRank(a));
     return scored;
   }, [filtered]);
 
