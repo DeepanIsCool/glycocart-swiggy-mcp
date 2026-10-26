@@ -1,6 +1,6 @@
 import type { Client } from "@modelcontextprotocol/client";
 import type { UserProfile } from "./profile";
-import { buildSwiggyTools } from "./swiggy-tools";
+import { buildSwiggyTools, thrownMessage } from "./swiggy-tools";
 import { buildCartTools, type CartMemory } from "./cart-tools";
 import { buildInstamartTools } from "./instamart-tools";
 import { buildOrderTools } from "./orders-tools";
@@ -19,7 +19,7 @@ export function buildToolset(
   dineoutClient?: Client | null,
   cartMemory?: CartMemory
 ) {
-  return {
+  return containErrors({
     ...buildSwiggyTools(swiggyClient, profile),
     ...buildCartTools(swiggyClient, profile, cartMemory),
     ...buildOrderTools(swiggyClient, profile),
@@ -28,7 +28,29 @@ export function buildToolset(
     // whole chat failing.
     ...(instamartClient ? buildInstamartTools(instamartClient, profile) : {}),
     ...(dineoutClient ? buildDineoutTools(dineoutClient, profile) : {})
-  };
+  });
+}
+
+/**
+ * A tool that throws ends the whole reply: the AI SDK turns it into a stream
+ * error, the model never sees a result, and the turn is not saved. Every tool
+ * returns a failure the model can explain instead, which is what the system
+ * prompt's recovery rules assume.
+ */
+function containErrors<T extends Record<string, { execute?: (...args: any[]) => PromiseLike<unknown> }>>(tools: T): T {
+  for (const [name, t] of Object.entries(tools)) {
+    const run = t.execute;
+    if (typeof run !== "function") continue;
+    t.execute = async (...args: any[]) => {
+      try {
+        return await run(...args);
+      } catch (err) {
+        console.error(`Tool ${name} threw`, err);
+        return { success: false, error: { message: thrownMessage(name, err) } };
+      }
+    };
+  }
+  return tools;
 }
 
 /**

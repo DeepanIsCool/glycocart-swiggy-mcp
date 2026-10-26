@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSessionUid } from "@/lib/session";
-import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
+import { getSwiggyClient, closeClients } from "@/lib/swiggy-mcp-client";
 import { callSwiggyRaw, unwrapSwiggy } from "@/lib/swiggy-tools";
+import { splitOrderedItems } from "@/lib/orders-tools";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
  * or a safe food. Ordering something is not evidence of how it affects your
  * glucose, and we must not imply otherwise.
  */
-export async function GET() {
+export async function GET(req: Request) {
   const uid = await getSessionUid();
   if (!uid) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
@@ -46,11 +47,14 @@ export async function GET() {
     let frequentItems: string[] = [];
     let frequentRestaurants: string[] = [];
 
-    if (addresses[0]?.id) {
+    // Settings only lists addresses; reading order history there was a second,
+    // slower Swiggy call whose result it threw away.
+    const addressesOnly = new URL(req.url).searchParams.get("addresses_only") === "1";
+    if (!addressesOnly && addresses[0]?.id) {
       try {
         const ordersRes = await callSwiggyRaw(client, "get_food_orders", { addressId: addresses[0].id });
         const orders = unwrapSwiggy(ordersRes)?.orders ?? [];
-        frequentItems = rank(orders.flatMap((o: any) => splitItems(o.orderedItems)));
+        frequentItems = rank(orders.flatMap((o: any) => splitOrderedItems(o.orderedItems)));
         frequentRestaurants = rank(orders.map((o: any) => o.restaurantName).filter(Boolean));
       } catch (err) {
         // History is a nice-to-have; onboarding must still work without it.
@@ -62,22 +66,9 @@ export async function GET() {
   } catch (err) {
     console.error("Swiggy context lookup failed", err);
     return NextResponse.json({ error: "Couldn't reach Swiggy." }, { status: 502 });
+  } finally {
+    await closeClients(client);
   }
-}
-
-/** `orderedItems` arrives as a human-readable summary string, not a list. */
-function splitItems(summary: unknown): string[] {
-  if (typeof summary !== "string") return [];
-  return summary
-    .split(/,|\band\b|\|/i)
-    .map((s) =>
-      s
-        .replace(/^\s*\d+\s*[xX×]\s*/, "") // leading "2 x "
-        .replace(/\s*[xX×]\s*\d+\s*$/, "") // trailing " x2"
-        .replace(/\(.*?\)/g, "")
-        .trim()
-    )
-    .filter((s) => s.length > 2 && s.length < 60);
 }
 
 function rank(values: string[], limit = 8): string[] {

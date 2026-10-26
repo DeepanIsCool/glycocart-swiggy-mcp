@@ -5,6 +5,7 @@ import {
   SWIGGY_FOOD_MCP_URL,
   SWIGGY_REDIRECT_URI,
   getSwiggyClient,
+  closeClients,
   resolveUid
 } from "@/lib/swiggy-mcp-client";
 import { setSessionUid, getSessionUid } from "@/lib/session";
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
   // than the browser. Done once here, then cached in our own session cookie.
   const client = await getSwiggyClient();
   if (!client) return fail("session_unavailable");
+  await closeClients(client);
 
   // Reuse the id already in this browser's session if there is one, so a
   // re-login on the same device keeps the existing profile.

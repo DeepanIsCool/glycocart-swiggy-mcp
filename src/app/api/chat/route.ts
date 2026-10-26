@@ -2,7 +2,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { streamText, convertToCoreMessages } from "ai";
 import { buildToolset } from "@/lib/tools";
 import type { UserProfile } from "@/lib/profile";
-import { getSwiggyClient, getInstamartClient, getDineoutClient } from "@/lib/swiggy-mcp-client";
+import { getSwiggyClient, getInstamartClient, getDineoutClient, closeClients } from "@/lib/swiggy-mcp-client";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { appendMessages, getMessages } from "@/lib/sessions";
@@ -142,12 +142,51 @@ export async function POST(req: Request) {
     }
   });
 
-  return result.toDataStreamResponse({
+  const response = result.toDataStreamResponse({
     getErrorMessage: (error: unknown) => {
       console.error("=== CHAT STREAM ERROR ===", error);
       return describeError(error);
     }
   });
+  // Tools run while the reply streams, so the clients close when it ends:
+  // finished, failed, or cancelled by the reader.
+  return closeAfterStream(response, () => closeClients(swiggyClient, instamartClient, dineoutClient));
+}
+
+/** Runs `cleanup` once, when the response body is fully read, errors, or is cancelled. */
+function closeAfterStream(res: Response, cleanup: () => Promise<void>): Response {
+  let ran = false;
+  const once = () => {
+    if (ran) return;
+    ran = true;
+    void cleanup();
+  };
+  if (!res.body) {
+    once();
+    return res;
+  }
+  const reader = res.body.getReader();
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { value, done } = await reader.read();
+        if (done) {
+          controller.close();
+          once();
+        } else {
+          controller.enqueue(value);
+        }
+      } catch (err) {
+        controller.error(err);
+        once();
+      }
+    },
+    async cancel(reason) {
+      once();
+      await reader.cancel(reason);
+    }
+  });
+  return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
 }
 
 /**

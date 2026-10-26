@@ -546,11 +546,24 @@ export function ChatView({ profile }: { profile: ProfileView }) {
 
                     {hasEmptyResult(m) && dishes.length === 0 && (
                       <div className="card-solid p-5 text-sm text-ink-soft leading-relaxed">
-                        <p className="font-medium mb-1">No dishes matched that search.</p>
-                        <p className="text-ink-muted">
-                          Try a broader term (&ldquo;lunch&rdquo; rather than a specific dish), or
-                          check that your delivery address in Settings is the one you meant.
-                        </p>
+                        {dietExcluded(m) > 0 ? (
+                          <>
+                            {/* Every result was non-veg. "No dishes matched" was untrue. */}
+                            <p className="font-medium mb-1">Every dish found was non-veg.</p>
+                            <p className="text-ink-muted">
+                              {dietExcluded(m)} {dietExcluded(m) === 1 ? "result was" : "results were"} left
+                              out for your diet. Try a vegetarian dish name instead.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-medium mb-1">No dishes matched that search.</p>
+                            <p className="text-ink-muted">
+                              Try a broader term (&ldquo;lunch&rdquo; rather than a specific dish), or
+                              check that your delivery address in Settings is the one you meant.
+                            </p>
+                          </>
+                        )}
                       </div>
                     )}
 
@@ -953,6 +966,15 @@ function extractDineout(msg: any): DineoutRestaurantView[] {
     if (Array.isArray(t.result?.restaurants)) out.push(...t.result.restaurants);
   }
   return out.slice(0, 6);
+}
+
+/** How many search_menu results this message dropped for the person's diet. */
+function dietExcluded(msg: any): number {
+  let n = 0;
+  for (const t of msg.toolInvocations ?? []) {
+    if (t.state === "result" && t.toolName === "search_menu") n += Number(t.result?.diet_excluded) || 0;
+  }
+  return n;
 }
 
 /** True when a tool ran but the underlying Swiggy call reported failure. */

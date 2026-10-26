@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSwiggyClient, getInstamartClient, getDineoutClient } from "@/lib/swiggy-mcp-client";
+import { getSwiggyClient, getInstamartClient, getDineoutClient, closeClients } from "@/lib/swiggy-mcp-client";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { isReadOnlyDebugTool } from "@/lib/debug-tools";
@@ -25,7 +25,12 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const call = url.searchParams.get("call");
   const server = url.searchParams.get("server") ?? "food";
-  const args = JSON.parse(url.searchParams.get("args") ?? "{}");
+  let args: Record<string, unknown>;
+  try {
+    args = JSON.parse(url.searchParams.get("args") ?? "{}");
+  } catch {
+    return NextResponse.json({ error: "args must be JSON" }, { status: 400 });
+  }
 
   const client =
     server === "instamart"
@@ -35,28 +40,32 @@ export async function GET(req: Request) {
         : await getSwiggyClient();
   if (!client) return NextResponse.json({ error: `${server} client unavailable` }, { status: 502 });
 
-  if (call) {
-    if (!isReadOnlyDebugTool(call)) {
-      return NextResponse.json({ error: `"${call}" is not a read-only tool` }, { status: 403 });
+  try {
+    if (call) {
+      if (!isReadOnlyDebugTool(call)) {
+        return NextResponse.json({ error: `"${call}" is not a read-only tool` }, { status: 403 });
+      }
+      const res = await client.callTool({
+        name: call,
+        arguments: { addressId: profile?.defaultAddressId, ...args }
+      });
+      const text = (res.content as any[])?.[0]?.text;
+      let parsed: any;
+      try {
+        parsed = text ? JSON.parse(text) : undefined;
+      } catch {
+        parsed = text;
+      }
+      return NextResponse.json({ isError: res.isError, structured: res.structuredContent, parsed });
     }
-    const res = await client.callTool({
-      name: call,
-      arguments: { addressId: profile?.defaultAddressId, ...args }
-    });
-    const text = (res.content as any[])?.[0]?.text;
-    let parsed: any;
-    try {
-      parsed = text ? JSON.parse(text) : undefined;
-    } catch {
-      parsed = text;
-    }
-    return NextResponse.json({ isError: res.isError, structured: res.structuredContent, parsed });
-  }
 
-  const { tools } = await client.listTools();
-  return NextResponse.json({
-    server,
-    addressId: profile?.defaultAddressId,
-    tools: tools.map((t) => ({ name: t.name, description: t.description, input: t.inputSchema }))
-  });
+    const { tools } = await client.listTools();
+    return NextResponse.json({
+      server,
+      addressId: profile?.defaultAddressId,
+      tools: tools.map((t) => ({ name: t.name, description: t.description, input: t.inputSchema }))
+    });
+  } finally {
+    await closeClients(client);
+  }
 }

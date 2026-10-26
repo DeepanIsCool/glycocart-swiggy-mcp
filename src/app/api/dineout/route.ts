@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
-import { getDineoutClient, hasSwiggySession } from "@/lib/swiggy-mcp-client";
+import { getDineoutClient, hasSwiggySession, closeClients } from "@/lib/swiggy-mcp-client";
 import { dineoutSearch } from "@/lib/dineout-tools";
 
 export const runtime = "nodejs";
@@ -24,6 +24,10 @@ export async function GET(req: Request) {
     );
   }
 
+  const params = new URL(req.url).searchParams;
+  const query = (params.get("q") ?? "").trim();
+  if (!query) return NextResponse.json({ error: "Search for a cuisine, place or vibe." }, { status: 400 });
+
   const client = await getDineoutClient();
   if (!client) {
     // No Swiggy session at all is a sign-in problem, not an outage.
@@ -31,10 +35,6 @@ export async function GET(req: Request) {
       ? NextResponse.json({ error: "Swiggy Dineout isn't reachable right now." }, { status: 502 })
       : NextResponse.json({ error: "Your Swiggy session has expired.", reconnect: true }, { status: 401 });
   }
-
-  const params = new URL(req.url).searchParams;
-  const query = (params.get("q") ?? "").trim();
-  if (!query) return NextResponse.json({ error: "Search for a cuisine, place or vibe." }, { status: 400 });
 
   try {
     // Dineout resolves its own coordinates from a saved address id; the food
@@ -55,5 +55,7 @@ export async function GET(req: Request) {
     return NextResponse.json(out);
   } catch {
     return NextResponse.json({ error: "Dineout search failed. Try again." }, { status: 502 });
+  } finally {
+    await closeClients(client);
   }
 }

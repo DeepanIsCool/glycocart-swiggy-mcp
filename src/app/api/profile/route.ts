@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   const uid = await getSessionUid();
   if (!uid) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const parsed = answersSchema.safeParse(await req.json());
+  const parsed = answersSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Some answers weren't valid.", issues: parsed.error.flatten().fieldErrors },

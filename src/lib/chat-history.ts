@@ -26,8 +26,13 @@ export function sanitizeHistory(messages: unknown): UiMessage[] {
   if (!Array.isArray(messages)) return [];
   const out: UiMessage[] = [];
   for (const m of messages) {
-    if (!m || typeof m !== "object" || typeof (m as UiMessage).role !== "string") continue;
+    if (!m || typeof m !== "object") continue;
     const msg = m as UiMessage;
+    // The history comes from the browser. A "system" message in it reached the
+    // model as an instruction beside ours, so any visitor could rewrite the
+    // prompt (scope, honesty rules) on the server's own key. Only the two
+    // conversational roles are the client's to send.
+    if (msg.role !== "user" && msg.role !== "assistant") continue;
     if (msg.role !== "assistant" || !Array.isArray(msg.toolInvocations)) {
       out.push(msg);
       continue;

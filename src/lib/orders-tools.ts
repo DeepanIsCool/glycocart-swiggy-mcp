@@ -13,33 +13,48 @@ import type { UserProfile } from "./profile";
  * GlycoCart still cannot create one.
  */
 
-/** `orderedItems` arrives as a human-readable summary string, not a list. */
-export function splitOrderedItems(summary: unknown): string[] {
+/**
+ * `orderedItems` arrives as a human-readable summary string, not a list, with
+ * a count written either side of a name ("2 x Paneer Tikka", "Naan x3").
+ */
+export function parseOrderedItems(summary: unknown): { name: string; quantity: number }[] {
   if (typeof summary !== "string") return [];
-  return summary
-    .split(/,|\band\b|\|/i)
-    .map((s) =>
-      s
-        .replace(/^\s*\d+\s*[xX×]\s*/, "")
-        .replace(/\s*[xX×]\s*\d+\s*$/, "")
-        .replace(/\(.*?\)/g, "")
-        .trim()
-    )
-    .filter((s) => s.length > 2 && s.length < 60);
+  const out: { name: string; quantity: number }[] = [];
+  for (const part of summary.split(/,|\band\b|\|/i)) {
+    const lead = part.match(/^\s*(\d+)\s*[xX×]\s*/);
+    const trail = part.match(/\s*[xX×]\s*(\d+)\s*$/);
+    const name = part
+      .replace(/^\s*\d+\s*[xX×]\s*/, "")
+      .replace(/\s*[xX×]\s*\d+\s*$/, "")
+      .replace(/\(.*?\)/g, "")
+      .trim();
+    if (name.length <= 2 || name.length >= 60) continue;
+    const n = Number(lead?.[1] ?? trail?.[1] ?? 1);
+    out.push({ name, quantity: Number.isInteger(n) && n >= 1 && n <= 50 ? n : 1 });
+  }
+  return out;
 }
 
-/** Retrospective estimate: what that past order probably did to their glucose. */
+export function splitOrderedItems(summary: unknown): string[] {
+  return parseOrderedItems(summary).map((i) => i.name);
+}
+
+/**
+ * Retrospective estimate: what that past order probably did to their glucose.
+ * Carbs count every unit: "3 x Butter Naan" was scored as one naan, so the
+ * daily budget under-read exactly the orders that mattered most.
+ */
 function scoreOrder(order: any, profile: UserProfile) {
-  const names = splitOrderedItems(order?.orderedItems);
+  const lines = parseOrderedItems(order?.orderedItems);
   let carbs = 0;
   let worstPeak = 0;
   let scored = 0;
 
-  for (const name of names) {
+  for (const { name, quantity } of lines) {
     const est = estimateNutrition(name);
     if (!est) continue;
     scored += 1;
-    carbs += est.carbs;
+    carbs += est.carbs * quantity;
     worstPeak = Math.max(worstPeak, predictGlucoseResponse(dishFromEstimate({ name }, est), profile).peakMgDl);
   }
 
@@ -52,13 +67,13 @@ function scoreOrder(order: any, profile: UserProfile) {
     delivery_status: order?.orderDeliveryStatus,
     is_active: Boolean(order?.isActiveOrder),
     ordered_at: order?.orderedTime,
-    items: names,
+    items: lines.map((l) => (l.quantity > 1 ? `${l.quantity} x ${l.name}` : l.name)),
     glucose: scored
       ? {
           estimated_carbs_g: Math.round(carbs),
           highest_item_peak_mg_dl: worstPeak,
           items_scored: scored,
-          items_unscored: names.length - scored
+          items_unscored: lines.length - scored
         }
       : null
   };
@@ -70,11 +85,14 @@ export function buildOrderTools(client: Client, profile: UserProfile) {
       description:
         "The user's Swiggy order history, each with a retrospective glucose estimate. Use for 'what have I been eating', spotting patterns, or checking an active delivery. Set activeOnly for current orders only.",
       parameters: z.object({
-        addressId: z.string(),
+        addressId: z.string().optional().describe("defaults to the saved delivery address"),
         activeOnly: z.boolean().optional()
       }),
       execute: async ({ addressId, activeOnly }) => {
-        const res = await callSwiggyRaw(client, "get_food_orders", { addressId, activeOnly });
+        const res = await callSwiggyRaw(client, "get_food_orders", {
+          addressId: addressId ?? profile.defaultAddressId,
+          activeOnly
+        });
         if (res?.success === false) return res;
         const data = unwrapSwiggy<any>(res);
         const orders = (data?.orders ?? []).map((o: any) => scoreOrder(o, profile));

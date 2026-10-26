@@ -37,14 +37,14 @@ export function decrypt<T>(raw: string | undefined): T | undefined {
 }
 
 /**
- * Pseudonymous, stable user id derived from the user's Swiggy phone number.
- * Salted with the server secret and one-way hashed — we get a durable key
- * without ever storing a phone number, so the profile row holds no direct PII.
+ * Pseudonymous, stable user id derived from the Swiggy account id (the access
+ * token's `sub`). Salted with the server secret and one-way hashed, so the
+ * profile row holds no account identifier.
  */
-export function deriveUid(phoneNumber: string): string {
+export function deriveUid(accountId: string): string {
   const secret = process.env.SWIGGY_TOKEN_SECRET;
   if (!secret) throw new Error("SWIGGY_TOKEN_SECRET is not set");
-  return createHash("sha256").update(`${phoneNumber}:${secret}`).digest("hex").slice(0, 32);
+  return createHash("sha256").update(`${accountId}:${secret}`).digest("hex").slice(0, 32);
 }
 
 export const secureCookie = process.env.NODE_ENV === "production";

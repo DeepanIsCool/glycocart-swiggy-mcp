@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { tool } from "ai";
 import type { Client } from "@modelcontextprotocol/client";
-import { unwrapSwiggy } from "./swiggy-tools";
+import { callSwiggyRaw, unwrapSwiggy } from "./swiggy-tools";
 import { predictGlucoseResponse } from "./glycemic";
 import { estimateNutrition, dishFromEstimate } from "./nutrition-estimate";
 import { swiggyImageUrl } from "./swiggy-image";
@@ -20,25 +20,12 @@ import type { UserProfile } from "./profile";
  * payment tools are absent by design.
  */
 
-async function callInstamart(client: Client, name: string, args: Record<string, unknown>) {
-  const res = await client.callTool({ name, arguments: args });
-
-  if (res.structuredContent !== undefined) return res.structuredContent as any;
-
-  const first = (res.content as { type?: string; text?: string }[] | undefined)?.[0];
-  let parsed: any;
-  if (first?.type === "text" && first.text) {
-    try {
-      parsed = JSON.parse(first.text);
-    } catch {
-      parsed = { raw: first.text };
-    }
-  }
-  if (res.isError) {
-    return { success: false, error: { message: parsed?.error?.message ?? parsed?.raw ?? `${name} failed` } };
-  }
-  return parsed ?? { success: false, error: { message: `${name} returned no content` } };
-}
+/**
+ * Same call path as Food. A private copy here returned `structuredContent`
+ * even when `isError` was set, so a failed Instamart call looked like success,
+ * and a thrown call ended the whole chat reply.
+ */
+const callInstamart = callSwiggyRaw;
 
 /** "500 g", "1 kg", "1 L" -> grams where we can, so per-pack maths is possible. */
 export function gramsFromQuantity(desc: unknown): number | null {

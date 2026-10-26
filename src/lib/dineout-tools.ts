@@ -4,6 +4,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import { predictGlucoseResponse } from "./glycemic";
 import { estimateNutrition, dishFromEstimate } from "./nutrition-estimate";
 import { swiggyImageUrl } from "./swiggy-image";
+import { thrownMessage } from "./swiggy-tools";
 import type { UserProfile } from "./profile";
 
 /**
@@ -193,7 +194,14 @@ export function cuisineBrief(cuisines: string[], profile: UserProfile): CuisineB
 }
 
 async function callDineout(client: Client, name: string, args: Record<string, unknown>) {
-  const res = await client.callTool({ name, arguments: args });
+  let res: Awaited<ReturnType<Client["callTool"]>>;
+  try {
+    res = await client.callTool({ name, arguments: args });
+  } catch (err) {
+    // Thrown, it ended the chat reply, and the Dineout page's search with it.
+    console.error(`Dineout ${name} threw`, err);
+    return { success: false as const, error: { message: thrownMessage(name, err) } };
+  }
   const text = (res.content as { text?: string }[] | undefined)?.[0]?.text ?? "";
   if (res.isError) {
     return { success: false as const, error: { message: text || `${name} failed` } };
@@ -258,20 +266,27 @@ export function buildDineoutTools(client: Client, profile: UserProfile) {
   return {
     search_dineout: tool({
       description:
-        "Find restaurants to BOOK A TABLE at (eating out, not delivery). Pass one term: a cuisine, restaurant name, area, or vibe like 'rooftop' or 'buffet'. Use the user's saved dineout addressId, or latitude/longitude for a named city.",
+        "Find restaurants to BOOK A TABLE at (eating out, not delivery). Pass one term: a cuisine, restaurant name, area, or vibe like 'rooftop' or 'buffet'. Searches near the user's saved address unless you pass latitude/longitude for a named city.",
       parameters: z.object({
         query: z.string().min(1).describe("one term — 'Italian', 'rooftop', 'Toit' — not a sentence"),
-        addressId: z.string().optional().describe("from get_dineout_locations, for 'near me'"),
+        addressId: z.string().optional().describe("defaults to the saved delivery address"),
         latitude: z.coerce.number().optional(),
         longitude: z.coerce.number().optional(),
         limit: z.coerce.number().min(1).max(30).optional()
       }),
       execute: async ({ query, addressId, latitude, longitude, limit }) => {
+        // With no location at all, Dineout has nothing to search near. The
+        // Dineout page uses the saved delivery address id and it works, so the
+        // agent does the same instead of sending an empty location.
+        const hasCoords = latitude !== undefined && longitude !== undefined;
+        const location = hasCoords
+          ? { latitude, longitude }
+          : { addressId: addressId ?? profile.defaultAddressId };
         const out = await dineoutSearch(
           client,
           profile,
           query,
-          { addressId, latitude, longitude },
+          location,
           { limit, withBriefs: true }
         );
         if ("success" in out) return out;

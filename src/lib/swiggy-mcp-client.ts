@@ -40,11 +40,23 @@ export async function getInstamartClient(): Promise<Client | null> {
 }
 
 /**
- * Dineout — table bookings. The one Swiggy surface whose transactions ARE
- * reversible (`cancel_booking` exists), unlike food orders.
+ * Dineout: table search and availability. Read-only here; the live server has
+ * no `cancel_booking`, so GlycoCart never books (see FORBIDDEN_TOOLS).
  */
 export async function getDineoutClient(): Promise<Client | null> {
   return connectTo(SWIGGY_DINEOUT_MCP_URL);
+}
+
+/**
+ * Close clients once a request is done with them.
+ *
+ * After `initialize` the SDK opens a long-lived GET event stream to each
+ * server and reconnects it when it drops. Nothing closed them, so every chat
+ * turn left three streams (Food, Instamart, Dineout) open on the function
+ * after its response had been sent, and every page view left one more.
+ */
+export async function closeClients(...clients: (Client | null | undefined)[]): Promise<void> {
+  await Promise.all(clients.map((c) => c?.close().catch(() => {})));
 }
 
 async function connectTo(serverUrl: string): Promise<Client | null> {

@@ -56,7 +56,7 @@ Swiggy OAuth redirect URIs:
 npm test && npm run build
 ```
 
-Fourteen suites, each written against a bug that shipped. Among them: the forbidden-tools check (which also covers any route that names a tool at runtime), the single-restaurant cart guard, WCAG AA contrast in both themes, the rule that the server key is never spent on a paid provider, and the avoid-list and diet matching.
+Fifteen suites, each written against a bug that shipped. Among them: the forbidden-tools check (which also covers any route that names a tool at runtime), the single-restaurant cart guard, WCAG AA contrast in both themes, the rule that the server key is never spent on a paid provider, and the avoid-list and diet matching.
 
 ## Privacy
 

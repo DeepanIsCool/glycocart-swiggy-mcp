@@ -19,7 +19,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const uid = await getSessionUid();
   if (!uid) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const parsed = z.object({ title: z.string().trim().min(1).max(80) }).safeParse(await req.json());
+  const body = await req.json().catch(() => null);
+  const parsed = z.object({ title: z.string().trim().min(1).max(80) }).safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid title." }, { status: 400 });
 
   const { id } = await params;
