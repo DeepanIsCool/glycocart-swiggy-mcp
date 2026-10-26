@@ -145,9 +145,9 @@ export function CartView({ addressLabel }: { addressLabel: string | null }) {
     return (
       <div role="status" aria-live="polite" className="space-y-3">
         <span className="sr-only">Loading your Swiggy cart</span>
-        <div className="card-solid h-20 animate-pulse" aria-hidden />
-        <div className="card-solid h-40 animate-pulse" aria-hidden />
-        <div className="card-solid h-28 animate-pulse" aria-hidden />
+        <div className="card-solid h-20 motion-safe:animate-pulse" aria-hidden />
+        <div className="card-solid h-40 motion-safe:animate-pulse" aria-hidden />
+        <div className="card-solid h-28 motion-safe:animate-pulse" aria-hidden />
       </div>
     );
   }

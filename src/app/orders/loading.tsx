@@ -16,7 +16,7 @@ export default function OrdersLoading() {
           <div role="status" aria-live="polite" className="space-y-3">
             <span className="sr-only">Loading your Swiggy orders</span>
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="card-solid h-32 animate-pulse" aria-hidden />
+              <div key={i} className="card-solid h-32 motion-safe:animate-pulse" aria-hidden />
             ))}
           </div>
         </div>

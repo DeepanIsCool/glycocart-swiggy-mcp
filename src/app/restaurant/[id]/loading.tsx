@@ -8,7 +8,7 @@ import { BackButton } from "./back-button";
  * (header, filters, section chips, dish cards) so nothing jumps when it lands.
  */
 export default function RestaurantLoading() {
-  const block = "bg-cream-deep animate-pulse motion-reduce:animate-none";
+  const block = "skeleton";
   return (
     <>
       <main className="app-scroll" aria-busy="true">

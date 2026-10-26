@@ -10,9 +10,6 @@ export interface ChatSessionSummary {
   updatedAt: string;
 }
 
-const FOCUS =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 focus-visible:ring-offset-cream";
-
 /** How long the delete button waits for its confirming second tap. */
 const CONFIRM_MS = 3000;
 
@@ -137,7 +134,7 @@ export function ChatSidebar({
           <button
             type="button"
             onClick={onNew}
-            className={cn("app-bar-action", FOCUS)}
+            className={cn("app-bar-action", "focus-ring")}
             aria-label="New chat"
           >
             <MessageSquarePlus size={18} aria-hidden />
@@ -145,7 +142,7 @@ export function ChatSidebar({
           <button
             type="button"
             onClick={onClose}
-            className={cn("app-bar-action md:hidden", FOCUS)}
+            className={cn("app-bar-action md:hidden", "focus-ring")}
             aria-label="Close chat history"
           >
             <X size={18} aria-hidden />
@@ -159,10 +156,10 @@ export function ChatSidebar({
             {[72, 56, 64, 48].map((w) => (
               <div key={w} className="px-3 py-2.5 space-y-1.5" aria-hidden>
                 <div
-                  className="h-3.5 rounded bg-cream-deep motion-safe:animate-pulse"
+                  className="h-3.5 rounded skeleton"
                   style={{ width: `${w}%` }}
                 />
-                <div className="h-3 w-12 rounded bg-cream-deep motion-safe:animate-pulse" />
+                <div className="h-3 w-12 rounded skeleton" />
               </div>
             ))}
           </div>
@@ -174,7 +171,7 @@ export function ChatSidebar({
             <button
               type="button"
               onClick={() => setRetryKey((k) => k + 1)}
-              className={cn("btn-ghost -ml-3 mt-1 min-h-11 text-ink", FOCUS)}
+              className={cn("btn-ghost -ml-3 mt-1 min-h-11 text-ink", "focus-ring")}
             >
               <RotateCw size={14} aria-hidden /> Try again
             </button>
@@ -209,7 +206,7 @@ export function ChatSidebar({
                   type="button"
                   onClick={() => onSelect(s.id)}
                   aria-current={active ? "true" : undefined}
-                  className={cn("flex-1 min-w-0 text-left px-3 py-2.5 rounded-lg", FOCUS)}
+                  className={cn("flex-1 min-w-0 text-left px-3 py-2.5 rounded-lg", "focus-ring")}
                 >
                   {/* Two lines, wrapping on words. A single truncated line cut most
                       real titles mid-word: "Show me open restaurants near my h…" */}
@@ -226,7 +223,7 @@ export function ChatSidebar({
                       ? "px-3 text-xs font-medium text-ember-text bg-ember/10"
                       : // Always visible on touch, where there is no hover to reveal it.
                         "text-ink-muted hover:text-ember-text md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100",
-                    FOCUS
+                    "focus-ring"
                   )}
                 >
                   {confirming ? "Delete" : <Trash2 size={15} aria-hidden />}

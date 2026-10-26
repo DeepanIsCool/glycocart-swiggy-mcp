@@ -50,9 +50,6 @@ const KEY_NAME: Record<Provider, string> = {
 };
 
 /** Keyboard focus is otherwise invisible: the base styles reset outlines. */
-const FOCUS =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 focus-visible:ring-offset-cream";
-
 /** Within this many px of the end, new content keeps the view pinned to it. */
 const STICK_PX = 80;
 
@@ -440,7 +437,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
         <button
           type="button"
           onClick={() => setSidebarOpen(true)}
-          className={cn("app-bar-action md:invisible", FOCUS)}
+          className={cn("app-bar-action md:invisible", "focus-ring")}
           aria-label="Chat history"
           aria-expanded={sidebarOpen}
         >
@@ -452,7 +449,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
         <button
           type="button"
           onClick={newChat}
-          className={cn("app-bar-action", FOCUS)}
+          className={cn("app-bar-action", "focus-ring")}
           aria-label="New chat"
         >
           <SquarePen size={19} aria-hidden />
@@ -482,7 +479,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
               <button
                 type="button"
                 onClick={() => loadSession(sessionId)}
-                className={cn("btn-ghost -ml-3 mt-2 min-h-11 text-ink", FOCUS)}
+                className={cn("btn-ghost -ml-3 mt-2 min-h-11 text-ink", "focus-ring")}
               >
                 <RotateCw size={14} aria-hidden /> Try again
               </button>
@@ -576,7 +573,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
               <p className="text-ink-soft mt-1 break-words">{errorText}</p>
               <div className="flex flex-wrap items-center gap-2 mt-3">
                 {errorAction && (
-                  <Link href={errorAction.href} className={cn("btn-primary min-h-11 py-2.5 text-sm", FOCUS)}>
+                  <Link href={errorAction.href} className={cn("btn-primary min-h-11 py-2.5 text-sm", "focus-ring")}>
                     {errorAction.label}
                   </Link>
                 )}
@@ -585,7 +582,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
                   onClick={retry}
                   className={cn(
                     errorAction ? "btn-ghost min-h-11 text-ink" : "btn-primary min-h-11 py-2.5 text-sm",
-                    FOCUS
+                    "focus-ring"
                   )}
                 >
                   <RotateCw size={14} aria-hidden /> Try again
@@ -608,7 +605,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
               }}
               className={cn(
                 "pointer-events-auto bg-ink text-cream size-11 rounded-full flex items-center justify-center shadow-lg hover:bg-ink-soft transition-colors motion-safe:animate-fade-up",
-                FOCUS
+                "focus-ring"
               )}
               aria-label="Scroll to latest message"
             >
@@ -631,7 +628,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
                   href={notice.action.href}
                   className={cn(
                     "shrink-0 min-h-11 inline-flex items-center px-3 rounded-full font-medium text-ink hover:bg-cream-deep transition-colors",
-                    FOCUS
+                    "focus-ring"
                   )}
                 >
                   {notice.action.label}
@@ -643,7 +640,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
                 aria-label="Dismiss"
                 className={cn(
                   "shrink-0 size-11 rounded-full inline-flex items-center justify-center text-ink-muted hover:text-ink hover:bg-cream-deep transition-colors",
-                  FOCUS
+                  "focus-ring"
                 )}
               >
                 <X size={16} aria-hidden />
@@ -657,7 +654,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
         <div className="pt-2 pb-1 shrink-0">
           <div
             className="max-w-3xl mx-auto flex gap-2 overflow-x-auto px-4 md:px-10 py-1
-            [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            scrollbar-none"
           >
             {SUGGESTED_PROMPTS.map(({ label, prompt }) => (
               <button
@@ -666,7 +663,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
                 onClick={() => void send(prompt, false)}
                 className={cn(
                   "shrink-0 min-h-11 text-sm px-4 rounded-full bg-cream-warm border border-ink/10 hover:bg-cream-deep active:scale-[0.98] transition-all motion-reduce:transition-none whitespace-nowrap",
-                  FOCUS
+                  "focus-ring"
                 )}
               >
                 {label}
@@ -715,7 +712,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
               aria-label="Stop reply"
               className={cn(
                 "shrink-0 size-11 rounded-full bg-ink text-cream inline-flex items-center justify-center hover:bg-ink-soft active:scale-95 transition-all motion-reduce:transition-none",
-                FOCUS
+                "focus-ring"
               )}
             >
               <Square size={14} fill="currentColor" aria-hidden />
@@ -728,7 +725,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
               className={cn(
                 "shrink-0 size-11 rounded-full bg-ink text-cream inline-flex items-center justify-center hover:bg-ink-soft active:scale-95 transition-all motion-reduce:transition-none",
                 "disabled:bg-cream-deep disabled:text-ink-muted disabled:cursor-not-allowed disabled:active:scale-100",
-                FOCUS
+                "focus-ring"
               )}
             >
               <ArrowUp size={19} strokeWidth={2.25} aria-hidden />
@@ -763,7 +760,7 @@ function EmptyState({ profile }: { profile: ProfileView }) {
         aria-label={`Your profile: ${profile.conditionLabel}, fasting baseline ${profile.fastingBaseline} mg/dL, ${profile.dailyCalTarget} kcal a day. Edit profile.`}
         className={cn(
           "inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-5 min-h-11 rounded-full border border-ink/10 bg-cream-warm px-4 py-2 text-xs text-ink-soft hover:bg-cream-deep transition-colors",
-          FOCUS
+          "focus-ring"
         )}
       >
         <span>{profile.conditionLabel}</span>
@@ -813,12 +810,12 @@ function ConversationSkeleton() {
   return (
     <div className="space-y-5" aria-busy="true" aria-label="Loading chat">
       <div className="flex justify-end" aria-hidden>
-        <div className="h-10 w-3/5 rounded-2xl rounded-br-md bg-cream-deep motion-safe:animate-pulse" />
+        <div className="h-10 w-3/5 rounded-2xl rounded-br-md skeleton" />
       </div>
       <div className="space-y-3" aria-hidden>
         <DishCardSkeleton />
         <DishCardSkeleton />
-        <div className="h-16 w-4/5 rounded-2xl rounded-bl-md bg-cream-deep motion-safe:animate-pulse" />
+        <div className="h-16 w-4/5 rounded-2xl rounded-bl-md skeleton" />
       </div>
     </div>
   );

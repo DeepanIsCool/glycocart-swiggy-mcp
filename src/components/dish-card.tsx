@@ -47,9 +47,6 @@ const VERDICT = {
 } as const;
 
 /** Keyboard focus is otherwise invisible: the base styles reset outlines. */
-const FOCUS =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 focus-visible:ring-offset-cream";
-
 export function DishCard({
   item,
   rank,
@@ -217,7 +214,7 @@ export function DishCard({
           // was easy to miss on a phone.
           className={cn(
             "shrink-0 self-center mr-2 size-11 rounded-full bg-swiggy/15 border border-swiggy/40 text-swiggy-text flex items-center justify-center hover:bg-swiggy/25 active:scale-95 transition-all motion-reduce:transition-none",
-            FOCUS
+            "focus-ring"
           )}
         >
           <Plus size={18} strokeWidth={2.5} aria-hidden />
@@ -270,7 +267,7 @@ export function DishCard({
             <button
               type="button"
               onClick={() => onAddToCart!(item)}
-              className={cn("btn-swiggy w-full mt-3 py-3 text-sm", FOCUS)}
+              className={cn("btn-swiggy w-full mt-3 py-3 text-sm", "focus-ring")}
             >
               <Plus size={15} aria-hidden /> Add to cart
             </button>
@@ -278,7 +275,7 @@ export function DishCard({
           {item.restaurant_id && showMenuLink && (
             <Link
               href={`/restaurant/${item.restaurant_id}`}
-              className={cn("btn-ghost mt-2 -ml-3 min-h-11 text-sm", FOCUS)}
+              className={cn("btn-ghost mt-2 -ml-3 min-h-11 text-sm", "focus-ring")}
             >
               See the full menu, scored <ArrowRight size={13} aria-hidden />
             </Link>
@@ -313,13 +310,13 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 export function DishCardSkeleton() {
   return (
     <div className="card-solid p-3 flex items-start gap-3" aria-hidden>
-      <span className="shrink-0 size-14 rounded-xl bg-cream-deep motion-safe:animate-pulse" />
+      <span className="shrink-0 size-14 rounded-xl skeleton" />
       <span className="flex-1 min-w-0 space-y-2 pt-0.5">
-        <span className="block h-3.5 w-3/5 rounded bg-cream-deep motion-safe:animate-pulse" />
-        <span className="block h-3 w-2/5 rounded bg-cream-deep motion-safe:animate-pulse" />
-        <span className="block h-3 w-1/2 rounded bg-cream-deep motion-safe:animate-pulse" />
+        <span className="block h-3.5 w-3/5 rounded skeleton" />
+        <span className="block h-3 w-2/5 rounded skeleton" />
+        <span className="block h-3 w-1/2 rounded skeleton" />
       </span>
-      <span className="shrink-0 self-center size-11 rounded-full bg-cream-deep motion-safe:animate-pulse" />
+      <span className="shrink-0 self-center size-11 rounded-full skeleton" />
     </div>
   );
 }

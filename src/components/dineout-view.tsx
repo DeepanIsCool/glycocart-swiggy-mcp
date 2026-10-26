@@ -13,9 +13,6 @@ import { cn } from "@/lib/utils";
  */
 const VIBES = ["Rooftop", "Buffet", "North Indian", "Chinese", "Cafe", "Seafood", "Outdoor seating"];
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 focus-visible:ring-offset-cream";
-
 export function DineoutView({ addressLabel }: { addressLabel?: string }) {
   const [query, setQuery] = useState("");
   /** The term the results on screen belong to, which the input may have moved on from. */
@@ -82,7 +79,7 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
           type="submit"
           disabled={loading || !query.trim()}
           aria-label="Search"
-          className={cn("btn-primary size-12 justify-center px-0 disabled:opacity-50", FOCUS_RING)}
+          className={cn("btn-primary size-12 justify-center px-0 disabled:opacity-50", "focus-ring")}
         >
           {loading ? (
             <Loader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden />
@@ -97,7 +94,7 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
       <div
         role="group"
         aria-label="Suggested searches"
-        className="-mx-5 md:-mx-10 mb-4 flex gap-2 overflow-x-auto px-5 md:px-10 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-5 md:-mx-10 mb-4 flex gap-2 overflow-x-auto px-5 md:px-10 pb-1 scrollbar-none"
       >
         {VIBES.map((v) => {
           const current = searched === v;
@@ -109,7 +106,7 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
               aria-pressed={current}
               className={cn(
                 "shrink-0 min-h-11 whitespace-nowrap rounded-full border px-4 text-sm transition-colors motion-reduce:transition-none",
-                FOCUS_RING,
+                "focus-ring",
                 current
                   ? "bg-ink text-cream border-ink font-medium"
                   : "bg-cream-warm border-ink/10 text-ink-soft hover:bg-cream-deep"
@@ -141,12 +138,12 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
           <p className="font-medium mb-1">Search didn&apos;t go through</p>
           <p className="text-sm text-ink-muted leading-relaxed">{error}</p>
           {fix === "address" && (
-            <a href="/settings" className={cn("btn-primary mt-4 min-h-11 text-sm", FOCUS_RING)}>
+            <a href="/settings" className={cn("btn-primary mt-4 min-h-11 text-sm", "focus-ring")}>
               Pick an address in Settings
             </a>
           )}
           {fix === "reconnect" && (
-            <a href="/api/auth/swiggy/login" className={cn("btn-primary mt-4 min-h-11 text-sm", FOCUS_RING)}>
+            <a href="/api/auth/swiggy/login" className={cn("btn-primary mt-4 min-h-11 text-sm", "focus-ring")}>
               Reconnect Swiggy
             </a>
           )}
@@ -156,7 +153,7 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
               onClick={() => search(searched)}
               className={cn(
                 "mt-4 inline-flex items-center justify-center min-h-11 rounded-full border border-ink/10 bg-cream px-4 text-sm font-medium text-ink-soft hover:text-ink hover:bg-cream-deep/60 transition-colors",
-                FOCUS_RING
+                "focus-ring"
               )}
             >
               Try again
@@ -174,9 +171,9 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
             <div key={i} className="card-solid p-3 flex items-start gap-3">
               <span className="size-16 rounded-xl bg-cream-deep shrink-0 animate-pulse motion-reduce:animate-none" />
               <span className="flex-1 space-y-2 pt-1">
-                <span className="block h-3.5 w-2/3 rounded bg-cream-deep animate-pulse motion-reduce:animate-none" />
-                <span className="block h-3 w-1/2 rounded bg-cream-deep animate-pulse motion-reduce:animate-none" />
-                <span className="block h-3 w-1/3 rounded bg-cream-deep animate-pulse motion-reduce:animate-none" />
+                <span className="block h-3.5 w-2/3 rounded skeleton" />
+                <span className="block h-3 w-1/2 rounded skeleton" />
+                <span className="block h-3 w-1/3 rounded skeleton" />
               </span>
             </div>
           ))}

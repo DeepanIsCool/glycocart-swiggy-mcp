@@ -34,9 +34,6 @@ const TOOL_LABELS: Record<string, { running: string; done: string }> = {
   list_instamart_coupons: { running: "Looking up Instamart coupons", done: "Looked up Instamart coupons" }
 };
 
-const FOCUS =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-leaf";
-
 export function ToolCallCard({
   toolName,
   args,
@@ -71,7 +68,7 @@ export function ToolCallCard({
         aria-controls={panelId}
         className={cn(
           "w-full min-h-11 flex items-center gap-2.5 px-4 py-2.5 rounded-2xl hover:bg-ink/[0.02] transition-colors text-left",
-          FOCUS
+          "focus-ring-inset"
         )}
       >
         {/* min-w-0 everywhere a truncate lives: without it a long label set the

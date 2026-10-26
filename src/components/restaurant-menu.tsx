@@ -14,9 +14,6 @@ export interface MenuCategory {
 
 type Notice = { tone: "ok" | "error"; text: string; href?: string; cta?: string };
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 focus-visible:ring-offset-cream";
-
 const sectionId = (i: number) => `menu-section-${i}`;
 
 function prefersReducedMotion() {
@@ -253,7 +250,7 @@ export function RestaurantMenu({
         >
           <div
             ref={chipScrollRef}
-            className="relative flex gap-2 overflow-x-auto px-5 md:px-10 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="relative flex gap-2 overflow-x-auto px-5 md:px-10 py-1.5 scrollbar-none"
           >
             {filtered.map((cat, i) => (
               <button
@@ -266,7 +263,7 @@ export function RestaurantMenu({
                 aria-current={active === i ? "location" : undefined}
                 className={cn(
                   "shrink-0 inline-flex items-center gap-1.5 min-h-11 rounded-full border px-4 text-sm whitespace-nowrap transition-colors motion-reduce:transition-none",
-                  FOCUS_RING,
+                  "focus-ring",
                   active === i
                     ? "bg-ink text-cream border-ink font-medium"
                     : "bg-cream-warm border-ink/10 text-ink-soft hover:text-ink"
@@ -289,7 +286,7 @@ export function RestaurantMenu({
           title={vegOnly ? "No vegetarian dishes yet" : "This menu came back empty"}
           action={
             vegOnly ? (
-              <button type="button" onClick={() => setVegOnly(false)} className={cn(SECONDARY_BTN, FOCUS_RING)}>
+              <button type="button" onClick={() => setVegOnly(false)} className={cn(SECONDARY_BTN, "focus-ring")}>
                 Show all dishes
               </button>
             ) : null
@@ -314,7 +311,7 @@ export function RestaurantMenu({
             <EmptyCard
               title="Nothing here could be scored"
               action={
-                <button type="button" onClick={() => setSort("menu")} className={cn(SECONDARY_BTN, FOCUS_RING)}>
+                <button type="button" onClick={() => setSort("menu")} className={cn(SECONDARY_BTN, "focus-ring")}>
                   Show menu order
                 </button>
               }
@@ -370,8 +367,8 @@ export function RestaurantMenu({
                 <div key={i} className="card-solid p-3 flex items-start gap-3">
                   <span className="size-14 rounded-xl bg-cream-deep shrink-0 animate-pulse motion-reduce:animate-none" />
                   <span className="flex-1 space-y-2 pt-1">
-                    <span className="block h-3.5 w-2/3 rounded bg-cream-deep animate-pulse motion-reduce:animate-none" />
-                    <span className="block h-3 w-1/3 rounded bg-cream-deep animate-pulse motion-reduce:animate-none" />
+                    <span className="block h-3.5 w-2/3 rounded skeleton" />
+                    <span className="block h-3 w-1/3 rounded skeleton" />
                   </span>
                 </div>
               ))}
@@ -389,7 +386,7 @@ export function RestaurantMenu({
             aria-busy={loading}
             className={cn(
               "w-full min-h-11 inline-flex items-center justify-center gap-2 rounded-full border border-ink/10 bg-cream-warm px-5 text-sm font-medium text-ink-soft transition-colors hover:bg-cream-deep/60 hover:text-ink disabled:cursor-wait",
-              FOCUS_RING
+              "focus-ring"
             )}
           >
             {loading && <Loader2 size={15} className="animate-spin motion-reduce:animate-none" aria-hidden />}
@@ -423,7 +420,7 @@ export function RestaurantMenu({
                 href={notice.href}
                 className={cn(
                   "shrink-0 inline-flex items-center min-h-11 rounded-full px-3 text-sm font-medium text-leaf-text hover:bg-cream-deep/60",
-                  FOCUS_RING
+                  "focus-ring"
                 )}
               >
                 {notice.cta}
@@ -435,7 +432,7 @@ export function RestaurantMenu({
               aria-label="Dismiss"
               className={cn(
                 "shrink-0 inline-flex items-center justify-center size-11 rounded-full text-ink-muted hover:text-ink hover:bg-cream-deep/60",
-                FOCUS_RING
+                "focus-ring"
               )}
             >
               <X size={16} aria-hidden />
@@ -476,7 +473,7 @@ function Toggle({
       aria-pressed={active}
       className={cn(
         "inline-flex items-center min-h-11 rounded-full border px-4 text-sm transition-colors motion-reduce:transition-none",
-        FOCUS_RING,
+        "focus-ring",
         active
           ? "bg-leaf-pale border-leaf/30 text-leaf-text font-medium"
           : "bg-cream-warm border-ink/10 text-ink-muted hover:text-ink"

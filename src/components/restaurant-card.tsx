@@ -22,9 +22,6 @@ export interface ScoredRestaurant {
 }
 
 /** Shared keyboard focus ring for the tappable cards on this surface. */
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 focus-visible:ring-offset-cream";
-
 const IMAGE_SIZE = {
   sm: { box: "size-16 rounded-xl", px: "64px", icon: 20 },
   lg: { box: "size-20 rounded-2xl", px: "80px", icon: 24 }
@@ -170,7 +167,7 @@ export function RestaurantCard({ r }: { r: ScoredRestaurant }) {
     </>
   );
 
-  const className = cn("card-solid w-full text-left p-3 flex items-start gap-3", linkable && "transition-colors hover:bg-cream-deep/40", linkable && FOCUS_RING);
+  const className = cn("card-solid w-full text-left p-3 flex items-start gap-3", linkable && "transition-colors hover:bg-cream-deep/40", linkable && "focus-ring");
 
   if (!linkable) return <div className={className}>{body}</div>;
   return (
@@ -251,7 +248,7 @@ export function DineoutCard({ r }: { r: DineoutRestaurantView }) {
         className={cn(
           "w-full text-left p-3 flex items-start gap-3 hover:bg-cream-deep/40 transition-colors",
           open ? "rounded-t-2xl" : "rounded-2xl",
-          FOCUS_RING,
+          "focus-ring",
           "focus-visible:ring-inset focus-visible:ring-offset-0"
         )}
       >
