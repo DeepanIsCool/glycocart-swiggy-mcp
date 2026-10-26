@@ -1,64 +1,74 @@
 import { NextResponse } from "next/server";
+import { getSessionUid } from "@/lib/session";
+import { resolveAiConfig } from "@/lib/ai-provider";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+interface ModelView {
+  id: string;
+  name: string;
+  provider: string;
+  context_length: number | null;
+  pricing: { prompt: string; completion: string };
+}
+
+/**
+ * Model list for the Settings picker. Signed-in only: it calls the provider
+ * with the server's key when the user has none, and that key is ours to spend.
+ * Same key rules as /api/chat, so OpenRouter lists only on the user's own key.
+ */
 export async function POST(req: Request) {
+  if (!(await getSessionUid())) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
+  let body: { provider?: unknown; customApiKey?: unknown };
   try {
-    const body = await req.json();
-    const { provider, customApiKey } = body as {
-      provider: "openrouter" | "nvidia";
-      customApiKey?: string;
-    };
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
 
-    const useNvidia = provider === "nvidia";
-    const resolvedApiKey = customApiKey || (useNvidia ? process.env.NVIDIA_API_KEY : process.env.OPENROUTER_API_KEY);
+  const ai = resolveAiConfig(body, process.env);
+  if (!ai.ok) return NextResponse.json({ error: ai.error }, { status: ai.status });
 
-    if (!resolvedApiKey) {
+  try {
+    const response = await fetch(`${ai.baseURL}/models`, {
+      headers: { Authorization: `Bearer ${ai.apiKey}`, "Content-Type": "application/json" },
+      cache: "no-store"
+    });
+    if (!response.ok) {
+      const status = response.status === 401 || response.status === 403 ? 401 : 502;
       return NextResponse.json(
-        { error: `${useNvidia ? 'NVIDIA_API_KEY' : 'OPENROUTER_API_KEY'} not set or provided.` },
-        { status: 400 }
+        { error: status === 401 ? "The provider rejected that API key." : `The provider returned ${response.status}.` },
+        { status }
       );
     }
 
-    const url = useNvidia 
-      ? "https://integrate.api.nvidia.com/v1/models" 
-      : "https://openrouter.ai/api/v1/models";
+    const data = (await response.json()) as { data?: any[] };
+    const models: ModelView[] = (data.data ?? []).map((m: any) =>
+      ai.provider === "nvidia"
+        ? {
+            id: m.id,
+            name: String(m.id).split("/").pop() || m.id,
+            provider: m.owned_by || "nvidia",
+            context_length: null,
+            pricing: { prompt: "0", completion: "0" }
+          }
+        : {
+            id: m.id,
+            name: m.name || m.id,
+            provider: String(m.id).split("/")[0] || "openrouter",
+            context_length: m.context_length ?? null,
+            pricing: m.pricing || { prompt: "0", completion: "0" }
+          }
+    );
 
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${resolvedApiKey}`,
-        "Content-Type": "application/json"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch models from ${provider}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    
-    let models: any[] = [];
-    if (useNvidia) {
-      models = data.data.map((m: any) => ({
-        id: m.id,
-        name: m.id.split('/').pop() || m.id,
-        provider: m.owned_by || 'nvidia',
-        context_length: null,
-        pricing: { prompt: "0", completion: "0" }
-      }));
-    } else {
-      models = data.data.map((m: any) => ({
-        id: m.id,
-        name: m.name || m.id,
-        provider: m.id.split('/')[0] || 'openrouter',
-        context_length: m.context_length,
-        pricing: m.pricing || { prompt: "0", completion: "0" }
-      }));
-    }
-
-    // Remove duplicates based on model id
-    const uniqueModels = Array.from(new Map(models.map(m => [m.id, m])).values());
-
-    return NextResponse.json({ models: uniqueModels });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const unique = Array.from(new Map(models.map((m) => [m.id, m])).values());
+    return NextResponse.json({ models: unique });
+  } catch (err) {
+    console.error("Model list fetch failed", err);
+    return NextResponse.json({ error: "Couldn't reach the provider." }, { status: 502 });
   }
 }

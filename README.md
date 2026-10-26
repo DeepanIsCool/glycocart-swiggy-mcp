@@ -1,138 +1,65 @@
 # GlycoCart
 
-> **Order food that works for your body.**
-> A glucose-aware ordering agent for Indians managing PCOS, prediabetes, and metabolic health — built on Swiggy's MCP.
+A food-ordering assistant for people managing PCOS, prediabetes or glucose on a CGM, built on Swiggy's MCP servers.
 
-[![Demo](https://img.shields.io/badge/demo-live-0E7E5C)](https://glycocart.vercel.app)
-[![MCP](https://img.shields.io/badge/swiggy-mcp-0F1614)](https://mcp.swiggy.com/builders)
-
----
+Live: https://glycocart.vercel.app
 
 ## What it does
 
-Most CGM and PCOS apps tell you what *not* to eat. None help you actually *order* it.
+You sign in with your Swiggy account, answer a short questionnaire, and chat. The agent searches real Swiggy restaurants and dishes for your saved delivery address, estimates how each dish is likely to affect your glucose, and builds a cart with the better options.
 
-GlycoCart closes the loop:
+- **Food delivery** (`mcp.swiggy.com/food`): dish and restaurant search, full menus, cart, coupons, order history and tracking.
+- **Groceries** (`mcp.swiggy.com/im`, Instamart): product search, your usual items, lower-GI swaps.
+- **Eating out** (`mcp.swiggy.com/dineout`): restaurants and table availability. Dineout publishes no menus, so GlycoCart gives an ordering brief from the cuisines, never a dish list.
+- **Daily carb budget** from what you have already ordered today, and a retrospective glucose estimate on past orders.
 
-1. **Reads your metabolic profile** — CGM data (Ultrahuman, Abbott Libre) or PCOS condition profile.
-2. **Ranks every Swiggy dish** by predicted personal glycemic impact, not generic GI tables.
-3. **Places a COD order** through Swiggy MCP.
-4. **Auto-logs the meal** to Apple Health / Ultrahuman, killing the manual food-log friction that drives 60-day churn in CGM apps.
+## What it will not do
 
-This wasn't buildable 6 months ago. It is now, on Swiggy MCP.
+**GlycoCart will not place your order, because Swiggy orders cannot be cancelled through the API.** Swiggy's docs say to phone support (080-67466729) to cancel. The live Dineout server has no `cancel_booking` either, so it will not book a table. The agent builds the cart and you check out in the Swiggy app.
 
-## Why it matters
+This is enforced by the absence of the tools, not by prompt wording: `place_food_order`, `checkout`, `confirm_order`, `book_table`, `create_cart` and the payment tools are never registered. `npm run test:cart-safety` asserts it.
 
-| Audience | Pain | TAM |
-|---|---|---|
-| PCOS women in metros | Pay ₹1,800/mo to dietitians, manually translate plans to Swiggy | ~50M Indian women |
-| CGM users (Ultrahuman / Levels) | Spend ₹4,200/2-weeks on sensors, get advice without execution | ~150K active, ~80% YoY growth |
-| Prediabetic / T2D | Managing 100M+ population with fragmented tools | 100M+ Indians |
+**It will not invent a number.** Swiggy publishes no per-dish nutrition. GlycoCart matches a dish name against a reference table of common Indian dishes (IFCT-2017 and USDA derived, `src/lib/catalog.ts`). A dish it cannot recognise is shown as unscored. A category match is labelled a rough estimate. Every glucose figure is an estimate from a closed-form model (`src/lib/glycemic.ts`) driven by your questionnaire answers, not a clinical measurement and not medical advice.
 
-## Architecture
+## Stack
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                       Next.js 15 App                         │
-│  ┌────────────┐    ┌─────────────────┐    ┌─────────────┐   │
-│  │  Landing   │───▶│   Chat View      │───▶│ Order Flow  │   │
-│  │  (persona) │    │  (Vercel AI SDK) │    │  (COD-only) │   │
-│  └────────────┘    └────────┬────────┘    └─────────────┘   │
-│                             │                                │
-│                    ┌────────▼─────────┐                      │
-│                    │  /api/chat       │                      │
-│                    │  streamText +    │                      │
-│                    │  tool calling    │                      │
-│                    └────────┬─────────┘                      │
-└─────────────────────────────┼───────────────────────────────┘
-                              │
-        ┌─────────────────────┼──────────────────┐
-        ▼                     ▼                  ▼
-┌──────────────┐    ┌──────────────────┐    ┌──────────────┐
-│  OpenRouter  │    │  Swiggy MCP      │    │  Glycemic    │
-│  (Claude     │    │  (mock → real    │    │  Predictor   │
-│   Sonnet)    │    │   on approval)   │    │  (per-user)  │
-└──────────────┘    └──────────────────┘    └──────────────┘
-```
+- Next.js 15 App Router, React 18, TypeScript strict, Tailwind 3.4
+- Vercel AI SDK 4 (`streamText` with multi-step tool calling)
+- `@modelcontextprotocol/client` with OAuth to Swiggy's MCP servers
+- Neon Postgres for profiles, chat history and the daily log
+- LLM: NVIDIA-hosted models by default on the server key (free). Users can switch to OpenRouter in Settings with their own key; the server never spends an OpenRouter key.
 
-### Tool layer mirrors Swiggy MCP
-
-The 4 tools the LLM can call use schemas matching `swiggy-food` MCP server signatures from the public [manifest](https://github.com/Swiggy/swiggy-mcp-server-manifest):
-
-| Tool | Swiggy MCP equivalent | Status |
-|---|---|---|
-| `search_restaurants` | `swiggy-food.search` | mock → live on approval |
-| `get_restaurant_menu` | `swiggy-food.menu` | mock → live on approval |
-| `rank_dishes_for_user` | (composed locally; combines menu + glycemic predictor) | local |
-| `place_order` | `swiggy-food.order.place` (COD) | mock → live on approval |
-
-Swap path: replace `executeMockTool` with the official MCP client (`@modelcontextprotocol/sdk`) once OAuth credentials are issued. Schemas remain identical — zero LLM-side changes.
-
-## Tech stack
-
-- **Frontend**: Next.js 15 (App Router), React 18, TypeScript strict, Tailwind 3.4
-- **Agent**: Vercel AI SDK v4 (`streamText` with multi-step tool calling)
-- **Model**: Claude 3.5 Sonnet via OpenRouter (swap to Bedrock once on Swiggy infra — same provider stack as Swiggy's own MCP per their AWS announcement)
-- **Charts**: Recharts (lightweight, no D3 baggage)
-- **Deploy**: Vercel (preview URL on every push)
-- **Production-side (planned)**: AWS Lambda for prediction service, Postgres with RLS for per-user data isolation, S3 for consent ledger audit logs
-
-## Run locally (Mac)
+## Run locally
 
 ```bash
-# 1. Install deps (uses npm; pnpm or bun also work)
 npm install
-
-# 2. Add your OpenRouter key
-cp .env.local.example .env.local
-# edit .env.local and paste your sk-or-v1-... key from openrouter.ai/keys
-
-# 3. Run
-npm run dev
-
-# Open http://localhost:3000
+cp .env.local.example .env.local   # fill in the values
+npm run dev                        # http://localhost:3000
 ```
 
-You'll get $1 free credit on OpenRouter to test (~50 chat exchanges with Sonnet).
+| Variable | Purpose |
+|---|---|
+| `NVIDIA_API_KEY` | Server-side LLM key (`nvapi-...`). Free tier at build.nvidia.com |
+| `NVIDIA_MODEL`, `OPENROUTER_MODEL` | Optional model overrides |
+| `NEXT_PUBLIC_APP_URL` | Public origin. Must match the redirect URI registered with Swiggy |
+| `SWIGGY_TOKEN_SECRET` | 32-byte hex. Encrypts session cookies and salts the pseudonymous user id |
+| `DATABASE_URL` | Neon Postgres connection string. Tables are created on first use |
 
-## Demo flow (90 seconds)
+Swiggy OAuth redirect URIs:
 
-1. Land on `/` → click **Try as Priya (PCOS)** or **Arjun (CGM)**
-2. Click a suggested prompt: *"Order me lunch — keep predicted peak under 140 mg/dL"*
-3. Watch the agent stream through tool calls — `search_restaurants` → `rank_dishes_for_user`
-4. See 3 ranked dish cards, each with predicted 3-hr glucose curve and personal match score
-5. Confirm order → see COD confirmation + auto-log to Apple Health (mocked)
+- Dev: `http://localhost:3000/api/auth/swiggy/callback`
+- Prod: `https://glycocart.deepansadhukhan.com/api/auth/swiggy/callback`
 
-## Production roadmap (post-approval)
+## Tests
 
-| Phase | Weeks | What ships |
-|---|---|---|
-| **0 — Approval** | now | This demo + form submission |
-| **1 — Live MCP** | 2 | Swap mock to real `mcp.swiggy.com/food` with OAuth |
-| **2 — CGM ingestion** | 4 | Ultrahuman API + Apple Health + Google Fit |
-| **3 — Personal model** | 8 | Per-user gradient boosted predictor (vs current closed-form) |
-| **4 — DPDP compliance** | 10 | Consent ledger, encryption-at-rest with per-user keys, audit trails |
-| **5 — Hospital pilot** | 12 | White-label for Apollo / Manipal diabetes-reversal programs |
+```bash
+npm test && npm run build
+```
 
-## OAuth & redirect URIs
+Ten suites, each written against a bug that shipped. Among them: the forbidden-tools check, the single-restaurant cart guard, WCAG AA contrast in both themes, and the rule that the server key is never spent on a paid provider.
 
-For Swiggy MCP review:
+## Privacy
 
-- **Dev**: `http://localhost:3000/api/auth/swiggy/callback`
-- **Prod**: `https://glycocart.deepansadhukhan.com/api/auth/swiggy/callback` (whitelisted)
-- **Claude Desktop testing**: `https://claude.ai/api/mcp/auth_callback` (already on Swiggy's whitelist)
-
-## Compliance
-
-- COD-only payments (matches current Swiggy MCP constraint)
-- DPDP Act 2023: explicit health-data consent, encryption at rest, India data residency
-- "Lifestyle optimization" framing — not medical advice (mirrors Ultrahuman's legal posture)
-- No raw glucose readings sent to LLM — only derived match scores
-
-## Status
-
-🟡 **Pre-approval.** Demo uses mock MCP. Ready to swap to live endpoints on access grant.
-
----
-
-Built by Deepan Sadhukhan · [LinkedIn](#) · [github.com/yourusername/glycocart](#)
+- API keys you enter stay in your browser and go only to the provider you chose.
+- Your profile is keyed by a pseudonymous id derived from your Swiggy account, not your name or phone number.
+- The LLM sees your questionnaire-derived profile and Swiggy results. There is no CGM integration today.

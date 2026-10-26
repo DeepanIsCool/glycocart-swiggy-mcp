@@ -7,6 +7,7 @@ import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { appendMessages } from "@/lib/sessions";
 import { getBudget, budgetSummary } from "@/lib/daily-log";
+import { resolveAiConfig } from "@/lib/ai-provider";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -39,35 +40,20 @@ export async function POST(req: Request) {
     });
   }
 
-  const useNvidia = provider === "nvidia";
-  const resolvedApiKey = customApiKey || (useNvidia ? process.env.NVIDIA_API_KEY : process.env.OPENROUTER_API_KEY);
-
-  if (!resolvedApiKey) {
-    return new Response(
-      JSON.stringify({ error: "API Key is required. Please enter your API Key in the settings (BYOK) to test the product." }),
-      { status: 401, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  if (useNvidia && !resolvedApiKey.startsWith("nvapi-")) {
-    return new Response(
-      JSON.stringify({ error: "Invalid API Key for NVIDIA. NVIDIA API keys must start with 'nvapi-'." }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  if (!useNvidia && !resolvedApiKey.startsWith("sk-or-v1-")) {
-    return new Response(
-      JSON.stringify({ error: "Invalid API Key for OpenRouter. OpenRouter API keys must start with 'sk-or-v1-'." }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
+  // The server key is NVIDIA only; OpenRouter always runs on the user's own key.
+  const ai = resolveAiConfig({ provider, customApiKey, customModel }, process.env);
+  if (!ai.ok) {
+    return new Response(JSON.stringify({ error: ai.error }), {
+      status: ai.status,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 
   const aiProvider = createOpenAI({
-    baseURL: useNvidia ? "https://integrate.api.nvidia.com/v1" : "https://openrouter.ai/api/v1",
-    apiKey: resolvedApiKey,
+    baseURL: ai.baseURL,
+    apiKey: ai.apiKey,
     compatibility: "compatible",
-    headers: useNvidia ? undefined : {
+    headers: ai.provider === "nvidia" ? undefined : {
       "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
       "X-Title": "GlycoCart"
     }
@@ -98,12 +84,7 @@ export async function POST(req: Request) {
 
   const systemPrompt = buildSystemPrompt(profile, !!instamartClient, !!dineoutClient, todaysBudget);
   
-  const defaultModel = useNvidia
-    ? (process.env.NVIDIA_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b")
-    : (process.env.OPENROUTER_MODEL ?? "anthropic/claude-3.5-sonnet");
-  const modelChoice = customModel || defaultModel;
-  
-  const model = aiProvider(modelChoice);
+  const model = aiProvider(ai.model);
 
   const result = streamText({
     model,
