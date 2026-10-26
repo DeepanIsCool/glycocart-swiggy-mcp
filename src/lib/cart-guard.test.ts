@@ -215,6 +215,51 @@ async function main() {
   );
 }
 
+  // An Add button means one more. Sending quantity 1 used to REPLACE the
+  // existing line, so a dish already in the cart at 2 dropped back to 1.
+  {
+    const client = fakeClient(cartWithFoodPeddler);
+    const tools = buildCartTools(client, profile);
+    const existing = (cartWithFoodPeddler as any).data.data.items[0];
+    await tools.update_food_cart.execute(
+      {
+        restaurantId: "123",
+        restaurantName: "Food Peddler Sandwiches",
+        addressId: "addr-1",
+        cartItems: [{ menu_item_id: String(existing.menu_item_id), quantity: 1 }],
+        mode: "add"
+      },
+      ctx
+    );
+    const update = client.sent.find((c: any) => c.name === "update_food_cart");
+    const line = update.args.cartItems.find((l: any) => l.menu_item_id === String(existing.menu_item_id));
+    assert.equal(line.quantity, Number(existing.quantity) + 1, "add mode must increment, not reset");
+  }
+
+  // If the cart can't be read, the guard and the merge are blind, and an
+  // update would replace whatever is in the cart. It must not write.
+  {
+    const client: any = {
+      calls: [] as string[],
+      async callTool({ name }: { name: string }) {
+        client.calls.push(name);
+        return { content: [{ type: "text", text: JSON.stringify({ error: { message: "upstream" } }) }], isError: true };
+      }
+    };
+    const tools = buildCartTools(client, profile);
+    const res: any = await tools.update_food_cart.execute(
+      {
+        restaurantId: "9",
+        restaurantName: "Burger King",
+        addressId: "addr-1",
+        cartItems: [{ menu_item_id: "5", quantity: 1 }]
+      },
+      ctx
+    );
+    assert.equal(res?.success, false, "a failed cart read must be reported");
+    assert.ok(!client.calls.includes("update_food_cart"), "must not write after a failed cart read");
+  }
+
   console.log("cart-guard: all checks passed");
 }
 

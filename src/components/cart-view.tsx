@@ -32,7 +32,7 @@ interface CartItem {
 interface Cart {
   cart_id: string | null;
   restaurant: { id?: string; name?: string; area?: string } | null;
-  delivering_to?: string | null;
+  delivery_eta?: string | null;
   needsAddress?: boolean;
   items: CartItem[];
   pricing: {
@@ -59,14 +59,19 @@ function isCart(data: unknown): data is Cart {
 
 function errorMessage(data: unknown, fallback: string): string {
   if (typeof data === "object" && data !== null) {
-    const d = data as { error?: unknown; message?: unknown };
+    const d = data as { error?: unknown; message?: unknown; recovery?: unknown };
     if (typeof d.error === "string") return d.error;
+    // A failed Swiggy call arrives as { success:false, error:{ message }, recovery? }.
+    const nested = (d.error as { message?: unknown } | undefined)?.message;
+    if (typeof nested === "string") {
+      return typeof d.recovery === "string" ? `${nested} Pick another address in Settings.` : nested;
+    }
     if (typeof d.message === "string") return d.message;
   }
   return fallback;
 }
 
-export function CartView() {
+export function CartView({ addressLabel }: { addressLabel: string | null }) {
   const [cart, setCart] = useState<Cart | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -105,7 +110,7 @@ export function CartView() {
       const res = await fetch("/api/cart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ restaurantId, restaurantName, menuItemId: item.menu_item_id, quantity })
+        body: JSON.stringify({ restaurantId, restaurantName, menuItemId: item.menu_item_id, quantity, mode: "set" })
       });
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok || !isCart(data)) {
@@ -219,14 +224,17 @@ export function CartView() {
         {/* A Swiggy cart belongs to one address. If the Swiggy app has a
             different address selected, this cart looks like it vanished, so
             name the address rather than leaving it a mystery. */}
-        {cart?.delivering_to && (
+        {addressLabel && (
           <p className="flex items-start gap-2 text-sm text-ink-soft leading-relaxed mt-1.5">
             <MapPin size={14} className="shrink-0 mt-1 text-ink-muted" aria-hidden />
             <span>
               <span className="sr-only">Delivering to </span>
-              {cart.delivering_to}
+              {addressLabel}
             </span>
           </p>
+        )}
+        {cart?.delivery_eta && (
+          <p className="text-sm text-ink-muted mt-1">Delivery in about {cart.delivery_eta}</p>
         )}
         <p className="text-xs text-ink-muted leading-relaxed mt-3 pt-3 border-t border-ink/10">
           A Swiggy cart holds dishes from one restaurant. Adding a dish from somewhere else

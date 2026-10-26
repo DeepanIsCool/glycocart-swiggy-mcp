@@ -64,6 +64,7 @@ export function RestaurantMenu({
   const [sort, setSort] = useState<"menu" | "best">("menu");
   const [vegOnly, setVegOnly] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const adding = useRef(false);
   const [active, setActive] = useState(0);
 
   const chipBarRef = useRef<HTMLElement>(null);
@@ -98,11 +99,15 @@ export function RestaurantMenu({
   }
 
   async function addToCart(item: ScoredItem) {
+    // Each add reads the cart, merges, and writes the whole cart back, so two
+    // overlapping adds can drop the first dish. One at a time.
+    if (adding.current) return;
     if (addressMissing) {
       setNotice({ tone: "error", text: "Pick a delivery address first.", href: "/settings", cta: "Settings" });
       return;
     }
     setNotice(null);
+    adding.current = true;
     try {
       const res = await fetch("/api/cart", {
         method: "POST",
@@ -111,10 +116,11 @@ export function RestaurantMenu({
           restaurantId: item.restaurant_id,
           restaurantName: item.restaurant_name,
           menuItemId: item.id,
-          quantity: 1
+          quantity: 1,
+          mode: "add"
         })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data?.conflict === "different_restaurant") {
         setNotice({
           tone: "error",
@@ -131,6 +137,8 @@ export function RestaurantMenu({
       setNotice({ tone: "ok", text: `Added ${item.name} to your Swiggy cart.`, href: "/cart", cta: "View cart" });
     } catch {
       setNotice({ tone: "error", text: "Couldn't reach Swiggy. Try again." });
+    } finally {
+      adding.current = false;
     }
   }
 

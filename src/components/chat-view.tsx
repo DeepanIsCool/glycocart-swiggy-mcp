@@ -83,6 +83,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   const submittingRef = useRef(false);
   /** Ignores a slow session load that a newer tap has superseded. */
   const loadSeq = useRef(0);
+  const addingRef = useRef(false);
 
   // Model choice lives in Settings now; the chat just reads it.
   const [ai, setAi] = useState<AiSettings>(DEFAULTS);
@@ -104,6 +105,9 @@ export function ChatView({ profile }: { profile: ProfileView }) {
    * from further up. It is now a snackbar over the composer.
    */
   async function addToCart(item: ScoredItem) {
+    // Each add reads, merges and rewrites the whole Swiggy cart, so two
+    // overlapping adds can drop the first dish. One at a time.
+    if (addingRef.current) return;
     if (!profile.defaultAddressId) {
       setNotice({
         tone: "error",
@@ -113,6 +117,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       return;
     }
     setNotice(null);
+    addingRef.current = true;
     try {
       const res = await fetch("/api/cart", {
         method: "POST",
@@ -122,10 +127,11 @@ export function ChatView({ profile }: { profile: ProfileView }) {
           restaurantName: item.restaurant_name,
           addressId: profile.defaultAddressId,
           menuItemId: item.id,
-          quantity: 1
+          quantity: 1,
+          mode: "add"
         })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data?.conflict === "different_restaurant") {
         setNotice({
           tone: "error",
@@ -137,7 +143,11 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       if (!res.ok || data?.success === false) {
         setNotice({
           tone: "error",
-          text: data?.error?.message ?? data?.message ?? "Couldn't add that to your cart."
+          // The route's own errors are plain strings; Swiggy's are { message }.
+          text:
+            (typeof data?.error === "string" ? data.error : data?.error?.message) ??
+            data?.message ??
+            "Couldn't add that to your cart."
         });
         return;
       }
@@ -148,6 +158,8 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       });
     } catch {
       setNotice({ tone: "error", text: "Couldn't reach Swiggy. Try again." });
+    } finally {
+      addingRef.current = false;
     }
   }
 

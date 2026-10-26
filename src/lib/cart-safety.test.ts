@@ -9,7 +9,7 @@
  * Run: npm run test:cart-safety
  */
 import assert from "node:assert";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const LIB = join(process.cwd(), "src/lib");
@@ -78,6 +78,34 @@ for (const required of ["get_food_cart", "update_food_cart", "flush_food_cart"])
     new RegExp(`^\\s*${required}\\s*:\\s*tool\\(`, "m").test(toolsFile),
     `cart-tools.ts is missing the expected tool: ${required}`
   );
+}
+
+// Any MCP call whose tool name is not a literal can be steered to a forbidden
+// tool by its caller. The dev-only debug route did exactly that: its name came
+// from the query string, so `?call=place_food_order` placed a real order. Every
+// such call site under src/ must gate the name through isReadOnlyDebugTool.
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((f) => {
+    const p = join(dir, f);
+    return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(f) && !f.endsWith(".test.ts") ? [p] : [];
+  });
+}
+for (const file of walk(join(process.cwd(), "src"))) {
+  const text = readFileSync(file, "utf8");
+  if (/callTool\s*\(\s*\{\s*name\s*:\s*[A-Za-z_$]/.test(text)) {
+    assert.ok(
+      text.includes("isReadOnlyDebugTool("),
+      `${file} calls an MCP tool by a variable name without gating it through isReadOnlyDebugTool`
+    );
+  }
+}
+
+const { isReadOnlyDebugTool } = require("./debug-tools") as typeof import("./debug-tools");
+for (const bad of [...FORBIDDEN, "update_food_cart", "flush_food_cart", "apply_food_coupon", "", undefined]) {
+  assert.equal(isReadOnlyDebugTool(bad), false, `debug route must refuse ${String(bad)}`);
+}
+for (const ok of ["get_food_cart", "search_menu", "get_restaurant_menu", "your_go_to_items"]) {
+  assert.equal(isReadOnlyDebugTool(ok), true, `debug route should allow read-only ${ok}`);
 }
 
 console.log("cart-safety: no checkout or payment tool is reachable by the agent");

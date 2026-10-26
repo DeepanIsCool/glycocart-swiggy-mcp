@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 export default async function CartPage() {
   const uid = await getSessionUid();
   if (!uid) redirect("/");
-  if (!(await getProfile(uid))) redirect("/onboarding");
+  const profile = await getProfile(uid);
+  if (!profile) redirect("/onboarding");
 
   return (
     <>
@@ -18,7 +19,7 @@ export default async function CartPage() {
           <div className="mb-6">
             <h1 className="display text-4xl leading-tight">Cart</h1>
           </div>
-          <CartView />
+          <CartView addressLabel={profile.defaultAddressLabel ?? null} />
         </div>
       </main>
       <BottomNav />
