@@ -87,6 +87,17 @@ async function ensureSchema() {
       primary key (user_id, day)
     )
   `;
+  // Swiggy's cart names its restaurant but never returns its id, which every
+  // cart change needs. Remembered here from the last successful add, by the
+  // agent or the UI alike.
+  await sql`
+    create table if not exists cart_context (
+      user_id          text primary key,
+      restaurant_id    text not null,
+      restaurant_name  text not null,
+      updated_at       timestamptz not null default now()
+    )
+  `;
   initialised = true;
 }
 
@@ -107,6 +118,7 @@ export async function deleteProfile(uid: string): Promise<void> {
   const sql = client();
   await sql`delete from chat_sessions where user_id = ${uid}`;
   await sql`delete from daily_log where user_id = ${uid}`;
+  await sql`delete from cart_context where user_id = ${uid}`;
   await sql`delete from user_profiles where id = ${uid}`;
 }
 
@@ -118,6 +130,29 @@ export async function saveProfile(uid: string, profile: UserProfile): Promise<vo
     values (${uid}, ${JSON.stringify(profile)}::jsonb)
     on conflict (id) do update
       set profile = excluded.profile,
+          updated_at = now()
+  `;
+}
+
+export async function getCartRestaurant(uid: string): Promise<{ id: string; name: string } | null> {
+  await ensureSchema();
+  const sql = client();
+  const rows = (await sql`select restaurant_id, restaurant_name from cart_context where user_id = ${uid}`) as {
+    restaurant_id: string;
+    restaurant_name: string;
+  }[];
+  return rows[0] ? { id: rows[0].restaurant_id, name: rows[0].restaurant_name } : null;
+}
+
+export async function setCartRestaurant(uid: string, id: string, name: string): Promise<void> {
+  await ensureSchema();
+  const sql = client();
+  await sql`
+    insert into cart_context (user_id, restaurant_id, restaurant_name)
+    values (${uid}, ${id}, ${name})
+    on conflict (user_id) do update
+      set restaurant_id = excluded.restaurant_id,
+          restaurant_name = excluded.restaurant_name,
           updated_at = now()
   `;
 }

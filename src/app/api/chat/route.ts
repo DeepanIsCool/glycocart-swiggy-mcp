@@ -10,6 +10,7 @@ import { sanitizeHistory, slimToolResults, turnToStore } from "@/lib/chat-histor
 import { budgetFromOrders, budgetSummary } from "@/lib/daily-log";
 import { buildOrderTools } from "@/lib/orders-tools";
 import { resolveAiConfig } from "@/lib/ai-provider";
+import { cartMemory } from "@/lib/cart-memory";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -95,7 +96,7 @@ export async function POST(req: Request) {
     getDineoutClient().catch(() => null),
     todaysOrders
   ]);
-  const tools = buildToolset(profile, swiggyClient, instamartClient, dineoutClient);
+  const tools = buildToolset(profile, swiggyClient, instamartClient, dineoutClient, cartMemory(uid));
 
   const todaysBudget = orders
     ? budgetSummary(budgetFromOrders(orders, profile))

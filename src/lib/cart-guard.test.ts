@@ -260,6 +260,51 @@ async function main() {
     assert.ok(!client.calls.includes("update_food_cart"), "must not write after a failed cart read");
   }
 
+  // One cart address. Swiggy carts are per-address; the agent passing its own
+  // address built a cart the Cart tab (which reads the default) couldn't see.
+  {
+    const client = fakeClient(cartWithFoodPeddler);
+    const tools = buildCartTools(client, { ...profile, defaultAddressId: "home" });
+    await tools.update_food_cart.execute(
+      {
+        restaurantId: "123",
+        restaurantName: "Food Peddler Sandwiches",
+        addressId: "somewhere-else",
+        cartItems: [{ menu_item_id: "1", quantity: 1 }]
+      },
+      ctx
+    );
+    await tools.get_food_cart.execute({ addressId: "somewhere-else" }, ctx);
+    const addresses = client.sent.map((c: any) => c.args.addressId).filter(Boolean);
+    assert.ok(addresses.length > 0 && addresses.every((a: string) => a === "home"), `every call must use the default address: ${addresses}`);
+  }
+
+  // A cart built by the agent must be editable from the Cart tab: the
+  // restaurant id is remembered on add and attached when the cart is read.
+  {
+    let saved: { id: string; name: string } | null = null;
+    const memory = {
+      remember: async (id: string, name: string) => void (saved = { id, name }),
+      recall: async () => saved
+    };
+    const client = fakeClient(cartWithFoodPeddler);
+    const tools = buildCartTools(client, profile, memory);
+    const after: any = await tools.update_food_cart.execute(
+      {
+        restaurantId: "123",
+        restaurantName: "Food Peddler Sandwiches",
+        addressId: "addr-1",
+        cartItems: [{ menu_item_id: "2", quantity: 1 }]
+      },
+      ctx
+    );
+    assert.deepEqual(saved, { id: "123", name: "Food Peddler Sandwiches" }, "the add is remembered");
+    assert.equal(after.restaurant?.id, "123", "the update returns the cart with its restaurant id");
+    assert.ok(Array.isArray(after.items) && after.items.length > 0, "the update returns the read-back cart, not a status");
+    const read: any = await tools.get_food_cart.execute({ addressId: "addr-1" }, ctx);
+    assert.equal(read.restaurant?.id, "123", "a later read carries the id too");
+  }
+
   console.log("cart-guard: all checks passed");
 }
 
