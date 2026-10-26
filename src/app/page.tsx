@@ -97,7 +97,7 @@ export default async function LandingPage({
             <h2 className="display text-2xl sm:text-3xl mb-4">It will not place your order.</h2>
             <p className="text-ink-soft leading-relaxed mb-4">
               A Swiggy order cannot be cancelled through the API. Once it is placed, the
-              only way out is phoning Swiggy on 080-67466729. So GlycoCart builds a real
+              only way out is phoning Swiggy on <a href="tel:08067466729" className="whitespace-nowrap underline underline-offset-2">080-67466729</a>. So GlycoCart builds a real
               cart on your account, prices it, tells you what it will do to your glucose,
               and then stops. You press the last button yourself, in Swiggy.
             </p>

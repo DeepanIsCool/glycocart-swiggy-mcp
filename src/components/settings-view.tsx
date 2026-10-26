@@ -459,7 +459,7 @@ function AiSection() {
         } else {
           if (key) setKeyStatus("unverified");
           setModelsError(typeof data.error === "string" ? data.error : "The model list didn't load.");
-          setModelsBroken(data.reason === "config");
+          setModelsBroken(data.reason === "config" || data.reason === "session");
         }
       } catch {
         if (cancelled) return;
