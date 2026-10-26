@@ -21,7 +21,7 @@ const env = {
 {
   const r = resolveAiConfig({ provider: "openrouter", customModel: "openai/o1-pro" }, env);
   assert.equal(r.ok, false, "OpenRouter without a user key must be refused");
-  if (!r.ok) assert.equal(r.status, 401);
+  assert.equal((r as { status?: number }).status, 401);
 }
 {
   const r = resolveAiConfig({ provider: "openrouter", customApiKey: "   " }, env);
@@ -30,7 +30,7 @@ const env = {
 {
   const r = resolveAiConfig({ provider: "openrouter", customApiKey: "nvapi-x" }, env);
   assert.equal(r.ok, false, "wrong-prefix key refused");
-  if (!r.ok) assert.equal(r.status, 400);
+  assert.equal((r as { status?: number }).status, 400);
 }
 {
   const r = resolveAiConfig(
