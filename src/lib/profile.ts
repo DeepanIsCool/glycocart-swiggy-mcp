@@ -19,7 +19,7 @@ export const CONDITIONS: { id: ConditionId; label: string; blurb: string }[] = [
   { id: "pcos", label: "PCOS", blurb: "Diagnosed PCOS, no insulin resistance diagnosis" },
   { id: "prediabetes", label: "Prediabetes", blurb: "HbA1c between 5.7 and 6.4, or told you're prediabetic" },
   { id: "t2d", label: "Type 2 diabetes", blurb: "Diagnosed type 2 diabetes" },
-  { id: "general", label: "General metabolic health", blurb: "No diagnosis — you just want steadier energy" }
+  { id: "general", label: "General metabolic health", blurb: "No diagnosis. You just want steadier energy" }
 ];
 
 export interface CalibrationAnswers {
@@ -103,16 +103,16 @@ export function deriveMetabolicProfile(a: CalibrationAnswers): MetabolicProfile 
   let fastingBaseline: number;
   if (typeof a.fastingGlucose === "number" && a.fastingGlucose > 0) {
     fastingBaseline = a.fastingGlucose;
-    derivation.push(`Fasting baseline ${Math.round(fastingBaseline)} mg/dL — the value you entered.`);
+    derivation.push(`Fasting baseline ${Math.round(fastingBaseline)} mg/dL: the value you entered.`);
   } else if (typeof a.hba1c === "number" && a.hba1c > 0) {
     fastingBaseline = eagFromHba1c(a.hba1c);
     derivation.push(
-      `Fasting baseline ${Math.round(fastingBaseline)} mg/dL — estimated from your HbA1c of ${a.hba1c}% using the ADA average-glucose formula.`
+      `Fasting baseline ${Math.round(fastingBaseline)} mg/dL: estimated from your HbA1c of ${a.hba1c}% using the ADA average-glucose formula.`
     );
   } else {
     fastingBaseline = prior.fasting;
     derivation.push(
-      `Fasting baseline ${fastingBaseline} mg/dL — a typical starting value for your condition, not a measurement. Add a lab value to sharpen this.`
+      `Fasting baseline ${fastingBaseline} mg/dL: a typical starting value for your condition, not a measurement. Add a lab value to sharpen this.`
     );
   }
   fastingBaseline = clamp(fastingBaseline, 70, 200);
@@ -152,14 +152,14 @@ export function deriveMetabolicProfile(a: CalibrationAnswers): MetabolicProfile 
 
   sensitivity = clamp(Number(sensitivity.toFixed(3)), 0.35, 1.1);
   derivation.push(
-    `Carb sensitivity ${sensitivity} — a population starting point based on ${reasons.join(", ")}. Higher means carbs raise your glucose faster.`
+    `Carb sensitivity ${sensitivity}: a population starting point based on ${reasons.join(", ")}. Higher means carbs raise your glucose faster.`
   );
 
   // --- Baseline AUC ---------------------------------------------------------
   // Calibrated so this reproduces the previously hand-tuned reference profiles.
   const baselineAUC = Math.round(fastingBaseline * sensitivity * 143);
   derivation.push(
-    `Typical 3-hour glucose load ${baselineAUC} — computed from your baseline and carb sensitivity; used to score how well a dish fits you.`
+    `Typical 3-hour glucose load ${baselineAUC}: computed from your baseline and carb sensitivity; used to score how well a dish fits you.`
   );
 
   derivation.push("These are estimates, not clinical measurements. Connect a CGM later to replace them with your real data.");

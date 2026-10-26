@@ -19,7 +19,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
-  title: "GlycoCart — Order food that works for your body",
+  title: "GlycoCart: order food that works for your body",
   description:
     "A glucose-aware ordering agent for PCOS, prediabetes & metabolic health. Built on Swiggy's MCP.",
   icons: {
