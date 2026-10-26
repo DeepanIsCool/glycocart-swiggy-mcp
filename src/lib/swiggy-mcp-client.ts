@@ -98,7 +98,7 @@ async function connectTo(serverUrl: string): Promise<Client | null> {
  * isn't a JWT, fall back to an id we mint and keep in our own session cookie —
  * stable per browser, which is honest about what we can actually guarantee.
  */
-export async function resolveUid(existingUid: string | null): Promise<string> {
+export async function resolveUid(existingUid: string | null): Promise<{ uid: string; fromAccount: boolean }> {
   // The account's own id wins over whatever this browser held before. Checking
   // the existing cookie first meant a second Swiggy account signing in on the
   // same browser inherited the first person's health profile.
@@ -106,12 +106,12 @@ export async function resolveUid(existingUid: string | null): Promise<string> {
     const provider = new CookieOAuthProvider(SWIGGY_REDIRECT_URI);
     const tokens = await provider.tokens();
     const sub = subjectFromJwt(tokens?.access_token);
-    if (sub) return deriveUid(sub);
+    if (sub) return { uid: deriveUid(sub), fromAccount: true };
   } catch (err) {
     console.error("Could not read subject from access token", err);
   }
 
-  return existingUid ?? randomUUID();
+  return { uid: existingUid ?? randomUUID(), fromAccount: false };
 }
 
 /** Reads the `sub` claim without verifying — the token came from our own OAuth exchange. */

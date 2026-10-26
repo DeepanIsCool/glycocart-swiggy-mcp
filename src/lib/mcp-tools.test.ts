@@ -11,6 +11,9 @@
  * - Order quantities were dropped: "3 x Butter Naan" counted as one naan in
  *   the daily carb budget.
  *
+ * - With no `sub` in the token, a second account signing in on the same
+ *   browser inherited the first person's profile. Saved address ids decide.
+ *
  * Run: npm run test:mcp-tools
  */
 import assert from "node:assert";
@@ -19,6 +22,7 @@ import { buildInstamartTools } from "./instamart-tools";
 import { buildDineoutTools } from "./dineout-tools";
 import { buildOrderTools, parseOrderedItems } from "./orders-tools";
 import { estimateNutrition } from "./nutrition-estimate";
+import { sameAccount } from "./account-match";
 import type { UserProfile } from "./profile";
 
 const profile: UserProfile = {
@@ -126,6 +130,12 @@ async function main() {
   );
   assert.ok(c3.orders[0].glucose.estimated_carbs_g > c1.orders[0].glucose.estimated_carbs_g);
   assert.deepEqual(c3.orders[0].items, ["3 x Butter Naan"], "the count stays visible on the order");
+
+  // 6. Same browser, which account?
+  assert.equal(sameAccount(["a", "b"], ["b", "c"]), true, "a shared address id is the same account");
+  assert.equal(sameAccount(["a", "b"], ["c"]), false, "no shared address id is a different account");
+  assert.equal(sameAccount([], ["c"]), null, "nothing on file yet: can't tell");
+  assert.equal(sameAccount(["a"], []), null, "no addresses on the account: can't tell");
 
   console.log("mcp-tools: all checks passed");
 }
