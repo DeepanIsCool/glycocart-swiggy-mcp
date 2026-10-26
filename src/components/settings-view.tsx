@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Check, Loader2, LogOut, MapPin, RefreshCw, Trash2, AlertTriangle,
-  ChevronDown, Search, Eye, EyeOff, CheckCircle2, XCircle, Info
-} from "lucide-react";
+import { Check, Loader2, ChevronDown, Search, Eye, EyeOff, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  loadAiSettings, saveAiSettings, keyLooksValid, DEFAULT_MODEL_LABEL, KEY_PREFIX,
+  loadAiSettings, saveAiSettings, DEFAULT_MODEL_LABEL, KEY_PREFIX,
   type AiSettings, type Provider, DEFAULTS
 } from "@/lib/ai-settings";
 
@@ -19,6 +16,116 @@ interface Address {
   category: string | null;
 }
 
+type AddressState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; list: Address[] };
+
+const PROVIDER_LABEL: Record<Provider, string> = { nvidia: "NVIDIA", openrouter: "OpenRouter" };
+
+/**
+ * A grouped list section in the iOS Settings style: a sentence-case header
+ * above the group, the rows in one card, and an optional footnote below.
+ */
+function Group({
+  title,
+  footer,
+  message,
+  children
+}: {
+  title: string;
+  footer?: ReactNode;
+  /** Result of an action in this group, shown where the action happened. */
+  message?: { text: string; tone: "good" | "bad" } | null;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <section aria-labelledby={id}>
+      <h2 id={id} className="section-label px-1 mb-2">
+        {title}
+      </h2>
+      <div className="card-solid overflow-hidden divide-y divide-ink/10">{children}</div>
+      {message && (
+        <p
+          className={cn("text-sm leading-relaxed px-1 mt-2", message.tone === "bad" ? "text-ember-text" : "text-leaf-text")}
+          role={message.tone === "bad" ? "alert" : "status"}
+        >
+          {message.text}
+        </p>
+      )}
+      {footer && <div className="text-xs text-ink-muted leading-relaxed px-1 mt-2">{footer}</div>}
+    </section>
+  );
+}
+
+/**
+ * Two-step destructive row. The first tap reveals what will happen and a
+ * confirm button; nothing irreversible happens on a single tap.
+ */
+function ConfirmRow({
+  label,
+  question,
+  detail,
+  confirmLabel,
+  busy,
+  disabled,
+  onConfirm
+}: {
+  label: string;
+  question: string;
+  detail: string;
+  confirmLabel: string;
+  busy: boolean;
+  disabled: boolean;
+  onConfirm: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const qid = useId();
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        className="w-full min-h-12 px-4 text-left text-sm font-medium text-ember-text hover:bg-cream-deep/60 transition-colors disabled:opacity-50"
+      >
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <div className="px-4 py-4" role="group" aria-labelledby={qid}>
+      <p id={qid} className="text-sm font-medium">
+        {question}
+      </p>
+      <p className="text-sm text-ink-muted leading-relaxed mt-1">{detail}</p>
+      <div className="flex flex-wrap gap-2 mt-3">
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={disabled}
+          className="inline-flex items-center gap-2 min-h-11 px-4 rounded-full bg-ember text-on-accent text-sm font-medium disabled:opacity-60"
+        >
+          {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
+          {confirmLabel}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          disabled={busy}
+          autoFocus
+          className="inline-flex items-center min-h-11 px-4 rounded-full border border-ink/10 text-sm text-ink-soft hover:text-ink"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsView({
   currentAddressId,
   currentAddressLabel
@@ -27,34 +134,37 @@ export function SettingsView({
   currentAddressLabel?: string;
 }) {
   const router = useRouter();
-  const [addresses, setAddresses] = useState<Address[] | null>(null);
-  const [addrBusy, setAddrBusy] = useState(false);
+  const [addresses, setAddresses] = useState<AddressState>({ status: "loading" });
+  const [addrBusy, setAddrBusy] = useState<string | null>(null);
   const [selected, setSelected] = useState(currentAddressId);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [addrNotice, setAddrNotice] = useState<string | null>(null);
+  const [addrError, setAddrError] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"signout" | "delete" | null>(null);
 
+  async function loadAddresses() {
+    setAddresses({ status: "loading" });
+    try {
+      const res = await fetch("/api/swiggy/context");
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setAddresses({ status: "ready", list: Array.isArray(data.addresses) ? data.addresses : [] });
+    } catch {
+      // Used to fall through to "no saved addresses on your Swiggy account",
+      // which is false when the request simply failed.
+      setAddresses({ status: "error" });
+    }
+  }
+
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/swiggy/context");
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        if (!cancelled) setAddresses(data.addresses ?? []);
-      } catch {
-        if (!cancelled) setAddresses([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    loadAddresses();
   }, []);
 
   async function chooseAddress(addr: Address) {
-    setAddrBusy(true);
-    setError(null);
+    if (addr.id === selected) return;
+    setAddrBusy(addr.id);
+    setAddrError(null);
+    setAddrNotice(null);
     try {
       const res = await fetch("/api/profile/address", {
         method: "PATCH",
@@ -63,158 +173,188 @@ export function SettingsView({
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't save that address.");
       setSelected(addr.id);
-      setNotice("Delivery address updated.");
+      setAddrNotice("Delivery address updated. Your cart and search now use this address.");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save that address.");
+      setAddrError(err instanceof Error ? err.message : "Couldn't save that address.");
     } finally {
-      setAddrBusy(false);
+      setAddrBusy(null);
     }
   }
 
   async function signOut() {
     setBusy("signout");
-    await fetch("/api/session", { method: "POST" });
-    router.push("/");
-    router.refresh();
+    setAccountError(null);
+    try {
+      const res = await fetch("/api/session", { method: "POST" });
+      if (!res.ok) throw new Error();
+      router.push("/");
+      router.refresh();
+    } catch {
+      setAccountError("Couldn't sign out. Check your connection and try again.");
+      setBusy(null);
+    }
   }
 
   async function deleteEverything() {
     setBusy("delete");
-    setError(null);
+    setAccountError(null);
     try {
       const res = await fetch("/api/session", { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Deletion failed.");
+      // The API key lives in this browser, not our database, so deleting the
+      // server-side profile alone would leave it behind.
+      saveAiSettings(DEFAULTS);
       router.push("/");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Deletion failed.");
+      setAccountError(err instanceof Error ? err.message : "Deletion failed.");
       setBusy(null);
     }
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4">
-      {/* Delivery address */}
-      <section className="card-solid p-5">
-        <h2 className="section-label mb-3">Delivery address</h2>
-
-        {addresses === null && (
-          <p className="flex items-center gap-2 text-sm text-ink-muted">
-            <Loader2 size={14} className="animate-spin" /> Loading your saved addresses…
+    <div className="max-w-2xl mx-auto space-y-7">
+      <Group
+        title="Delivery address"
+        message={
+          addrError
+            ? { text: addrError, tone: "bad" }
+            : addrNotice
+              ? { text: addrNotice, tone: "good" }
+              : null
+        }
+        footer={
+          addresses.status === "ready" && addresses.list.length > 0
+            ? "Swiggy carts are per address. Use the same one in the Swiggy app when you check out."
+            : undefined
+        }
+      >
+        {addresses.status === "loading" && (
+          <p className="flex items-center gap-2 px-4 py-3.5 text-sm text-ink-muted" role="status">
+            <Loader2 size={14} className="animate-spin" aria-hidden /> Loading your saved addresses…
           </p>
         )}
 
-        {addresses?.length === 0 && (
-          <p className="text-sm text-ink-soft leading-relaxed">
-            No saved addresses on your Swiggy account. Add one in the Swiggy app;
-            restaurant search needs a delivery address.
-          </p>
-        )}
-
-        <div className="grid gap-2">
-          {addresses?.map((addr) => (
-            <button
-              key={addr.id}
-              type="button"
-              disabled={addrBusy}
-              onClick={() => chooseAddress(addr)}
-              className={cn(
-                "text-left rounded-xl border px-4 py-3 transition-colors flex items-start gap-3 disabled:opacity-60",
-                selected === addr.id
-                  ? "border-leaf bg-leaf-pale/40"
-                  : "border-ink/10 bg-cream hover:bg-cream-deep"
+        {addresses.status === "error" && (
+          <div className="px-4 py-3.5" role="alert">
+            <p className="text-sm text-ink-soft leading-relaxed">
+              Couldn&apos;t load your Swiggy addresses.
+              {currentAddressLabel && (
+                <>
+                  {" "}
+                  Currently delivering to {currentAddressLabel}.
+                </>
               )}
-            >
-              <MapPin size={15} className="text-ink-muted mt-0.5 shrink-0" />
-              <span className="min-w-0 flex-1">
-                {(addr.tag || addr.category) && (
-                  <span className="section-label block mb-0.5">
-                    {[addr.tag, addr.category].filter(Boolean).join(" · ")}
-                  </span>
-                )}
-                <span className="block text-sm line-clamp-2">{addr.addressLine}</span>
-              </span>
-              {selected === addr.id && <Check size={16} className="text-leaf-text shrink-0 mt-0.5" />}
-            </button>
-          ))}
-        </div>
-
-        {notice && <p className="text-sm text-leaf-text mt-3">{notice}</p>}
-      </section>
-
-      {/* Model — moved here from a gear inside the chat screen. */}
-      <AiSection />
-
-      {/* Swiggy connection */}
-      <section className="card-solid p-5">
-        <h2 className="section-label mb-3">Swiggy account</h2>
-        <p className="text-sm text-ink-soft leading-relaxed mb-4">
-          {currentAddressLabel
-            ? "Connected. Restaurants, menus and prices come from your own Swiggy account."
-            : "Connected."}
-        </p>
-        <a href="/api/auth/swiggy/login" className="btn-ghost border border-ink/10 rounded-full">
-          <RefreshCw size={14} /> reconnect swiggy
-        </a>
-      </section>
-
-      {/* Account */}
-      <section className="card-solid p-5">
-        <h2 className="section-label mb-3">Account</h2>
-        <button
-          type="button"
-          onClick={signOut}
-          disabled={busy !== null}
-          className="btn-ghost border border-ink/10 rounded-full disabled:opacity-60"
-        >
-          {busy === "signout" ? <Loader2 size={14} className="animate-spin" /> : <LogOut size={14} />}
-          sign out
-        </button>
-      </section>
-
-      {/* Data deletion */}
-      <section className="rounded-2xl border border-ember/30 bg-ember-soft/15 p-5">
-        <h2 className="text-xs font-medium text-ember-text mb-3">Delete my data</h2>
-        <p className="text-sm text-ink-soft leading-relaxed mb-4">
-          Permanently deletes your profile (condition, numbers, food preferences and
-          saved address) and signs you out. Your Swiggy account and order history are
-          not affected. This cannot be undone.
-        </p>
-
-        {!confirmDelete ? (
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            className="inline-flex items-center gap-2 rounded-full border border-ember/40 px-4 py-2 text-sm text-ember-text hover:bg-ember-soft/30 transition-colors"
-          >
-            <Trash2 size={14} /> delete my data
-          </button>
-        ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 text-sm text-ember-text">
-              <AlertTriangle size={14} /> Are you sure?
-            </span>
-            <button
-              type="button"
-              onClick={deleteEverything}
-              disabled={busy !== null}
-              className="inline-flex items-center gap-2 rounded-full bg-ember text-on-accent px-4 py-2 text-sm font-medium disabled:opacity-60"
-            >
-              {busy === "delete" ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              yes, delete everything
-            </button>
-            <button type="button" onClick={() => setConfirmDelete(false)} className="btn-ghost">
-              cancel
-            </button>
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <button
+                type="button"
+                onClick={loadAddresses}
+                className="inline-flex items-center min-h-11 px-4 rounded-full border border-ink/10 text-sm text-ink-soft hover:text-ink"
+              >
+                Try again
+              </button>
+              <a
+                href="/api/auth/swiggy/login"
+                className="inline-flex items-center min-h-11 px-4 rounded-full text-sm text-leaf-text hover:bg-cream-deep/60"
+              >
+                Reconnect Swiggy
+              </a>
+            </div>
           </div>
         )}
-      </section>
+
+        {addresses.status === "ready" && addresses.list.length === 0 && (
+          <p className="px-4 py-3.5 text-sm text-ink-soft leading-relaxed">
+            No saved addresses on your Swiggy account. Add one in the Swiggy app, then come
+            back here. Restaurant search needs a delivery address.
+          </p>
+        )}
+
+        {addresses.status === "ready" &&
+          addresses.list.map((addr) => {
+            const isSelected = selected === addr.id;
+            const label = [addr.tag, addr.category].filter(Boolean).join(", ");
+            return (
+              <button
+                key={addr.id}
+                type="button"
+                disabled={addrBusy !== null}
+                onClick={() => chooseAddress(addr)}
+                aria-pressed={isSelected}
+                className={cn(
+                  "w-full min-h-12 text-left px-4 py-3 flex items-start gap-3 transition-colors disabled:opacity-60",
+                  isSelected ? "bg-leaf-pale/40" : "hover:bg-cream-deep/60"
+                )}
+              >
+                <span className="min-w-0 flex-1">
+                  {label && <span className="block text-sm font-medium capitalize">{label}</span>}
+                  <span className={cn("block text-sm line-clamp-2", label ? "text-ink-muted" : "text-ink")}>
+                    {addr.addressLine}
+                  </span>
+                </span>
+                <span className="size-5 shrink-0 mt-0.5 inline-flex items-center justify-center">
+                  {addrBusy === addr.id ? (
+                    <Loader2 size={15} className="animate-spin text-ink-muted" aria-hidden />
+                  ) : (
+                    isSelected && <Check size={17} className="text-leaf-text" aria-hidden />
+                  )}
+                </span>
+              </button>
+            );
+          })}
+      </Group>
+
+      {/* Model, moved here from a gear inside the chat screen. */}
+      <AiSection />
+
+      <Group
+        title="Swiggy account"
+        footer="Restaurants, menus, prices and your cart come from your own Swiggy account. Reconnect if search or the cart stops loading."
+      >
+        <a
+          href="/api/auth/swiggy/login"
+          className="flex items-center justify-between w-full min-h-12 px-4 text-sm hover:bg-cream-deep/60 transition-colors"
+        >
+          <span>Reconnect Swiggy</span>
+          {/* The address list is read from Swiggy, so it loading is proof the
+              connection works. Anything else is not claimed. */}
+          {addresses.status === "ready" && <span className="text-ink-muted text-sm">Connected</span>}
+        </a>
+      </Group>
+
+      <Group
+        title="Account"
+        message={accountError ? { text: accountError, tone: "bad" } : null}
+        footer="Deleting your data removes your profile from GlycoCart. Your Swiggy account, cart and order history are not affected."
+      >
+        <ConfirmRow
+          label="Sign out"
+          question="Sign out of GlycoCart?"
+          detail="Your profile is kept for when you sign back in."
+          confirmLabel="Sign out"
+          busy={busy === "signout"}
+          disabled={busy !== null}
+          onConfirm={signOut}
+        />
+        <ConfirmRow
+          label="Delete my data"
+          question="Delete everything GlycoCart stores about you?"
+          detail="This permanently deletes your condition, numbers, food preferences and saved address, removes the API key saved in this browser, and signs you out. It cannot be undone."
+          confirmLabel="Delete my data"
+          busy={busy === "delete"}
+          disabled={busy !== null}
+          onConfirm={deleteEverything}
+        />
+      </Group>
 
       {/* The standing disclaimer. It used to sit under the chat composer on every
-          screenful; this is where a permanent statement actually belongs. */}
-      <section className="card-solid p-5">
-        <h2 className="section-label mb-3">About</h2>
+          screenful; this is where a permanent statement belongs. */}
+      <section aria-labelledby="about-heading" className="px-1">
+        <h2 id="about-heading" className="section-label mb-2">
+          About
+        </h2>
         <p className="text-sm text-ink-soft leading-relaxed">
           Restaurants, menus, prices and orders are live from your own Swiggy account
           through Swiggy&apos;s MCP. Glucose figures are estimates from dish names matched
@@ -222,24 +362,46 @@ export function SettingsView({
           GlycoCart is not medical advice and does not place orders or book tables.
         </p>
       </section>
-
-      {error && <p className="text-sm text-ember-text">{error}</p>}
     </div>
   );
 }
+
+interface ModelInfo {
+  id: string;
+  name: string;
+  pricing?: { prompt?: string; completion?: string };
+}
+
+/**
+ * idle      nothing to check (no key)
+ * malformed wrong prefix for this provider, so not sent anywhere
+ * checking  asking the provider for its model list with this key
+ * valid     the provider accepted the key
+ * rejected  the provider refused the key (401)
+ * unverified the provider could not be reached, so we cannot say
+ */
+type KeyStatus = "idle" | "malformed" | "checking" | "valid" | "rejected" | "unverified";
 
 /**
  * Bring-your-own-key model settings.
  *
  * Lives here, not in the chat: "Put general, infrequently changed settings in
  * your custom settings area" (Apple HIG, Settings).
+ *
+ * The server's free key is NVIDIA only. OpenRouter always runs on the user's
+ * own key, so with OpenRouter selected and no key, chat will refuse and the
+ * model list cannot load. That is said here, inline, before it fails in chat.
  */
 function AiSection() {
   const [ai, setAi] = useState<AiSettings>(DEFAULTS);
   const [showKey, setShowKey] = useState(false);
-  const [models, setModels] = useState<any[]>([]);
+  const [models, setModels] = useState<ModelInfo[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
-  const [keyStatus, setKeyStatus] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [keyStatus, setKeyStatus] = useState<KeyStatus>("idle");
+  const keyId = useId();
+  const keyHelpId = useId();
+  const modelLabelId = useId();
 
   useEffect(() => setAi(loadAiSettings()), []);
 
@@ -249,191 +411,362 @@ function AiSection() {
     saveAiSettings(next);
   }
 
+  const key = ai.apiKey.trim();
+  const providerName = PROVIDER_LABEL[ai.provider];
+  const needsKey = ai.provider === "openrouter" && !key;
+
   useEffect(() => {
-    if (ai.apiKey && !keyLooksValid(ai.provider, ai.apiKey)) {
-      setKeyStatus("invalid");
+    let cancelled = false;
+    setModels([]);
+    setModelsError(null);
+
+    if (needsKey) {
+      setKeyStatus("idle");
+      setLoadingModels(false);
       return;
     }
-    if (!ai.apiKey) setKeyStatus("idle");
+    if (key && !key.startsWith(KEY_PREFIX[ai.provider])) {
+      setKeyStatus("malformed");
+      setLoadingModels(false);
+      return;
+    }
+
+    setKeyStatus(key ? "checking" : "idle");
+    setLoadingModels(true);
 
     const t = setTimeout(async () => {
-      setLoadingModels(true);
-      if (ai.apiKey) setKeyStatus("checking");
       try {
         const res = await fetch("/api/models", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider: ai.provider, customApiKey: ai.apiKey })
+          body: JSON.stringify({ provider: ai.provider, customApiKey: key })
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.models)) {
-            setModels(data.models);
-            if (ai.apiKey) setKeyStatus("valid");
-          }
-        } else if (ai.apiKey) {
-          setKeyStatus("invalid");
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && Array.isArray(data.models)) {
+          setModels(data.models as ModelInfo[]);
+          if (key) setKeyStatus("valid");
+        } else if (key && res.status === 401) {
+          setKeyStatus("rejected");
+        } else {
+          if (key) setKeyStatus("unverified");
+          setModelsError(typeof data.error === "string" ? data.error : "The model list didn't load.");
         }
       } catch {
-        if (ai.apiKey) setKeyStatus("invalid");
+        if (cancelled) return;
+        if (key) setKeyStatus("unverified");
+        setModelsError("The model list didn't load.");
       } finally {
-        setLoadingModels(false);
+        if (!cancelled) setLoadingModels(false);
       }
     }, 500);
-    return () => clearTimeout(t);
-  }, [ai.provider, ai.apiKey]);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [ai.provider, key, needsKey]);
+
+  const keyMessage: { text: string; tone: "muted" | "good" | "bad" } = needsKey
+    ? {
+        text: "OpenRouter needs your own API key. GlycoCart's free default runs on NVIDIA only, so chat won't work on OpenRouter until you add one.",
+        tone: "bad"
+      }
+    : keyStatus === "malformed"
+      ? { text: `That isn't an ${providerName} key. ${providerName} keys start with ${KEY_PREFIX[ai.provider]}`, tone: "bad" }
+      : keyStatus === "checking"
+        ? { text: `Checking the key with ${providerName}…`, tone: "muted" }
+        : keyStatus === "valid"
+          ? { text: `${providerName} accepted this key.`, tone: "good" }
+          : keyStatus === "rejected"
+            ? { text: `${providerName} rejected this key. Check it was copied in full.`, tone: "bad" }
+            : keyStatus === "unverified"
+              ? { text: `Couldn't reach ${providerName} to check this key.`, tone: "muted" }
+              : { text: "Optional. Without a key, GlycoCart uses its free NVIDIA default.", tone: "muted" };
+
+  const pickerBlocked = needsKey || keyStatus === "malformed" || keyStatus === "rejected";
+  const defaultLabel =
+    ai.provider === "nvidia" ? `${DEFAULT_MODEL_LABEL} (default)` : "OpenRouter default";
 
   return (
-    <section className="card-solid p-5">
-      <h2 className="section-label mb-1">Model</h2>
-      <p className="text-sm text-ink-muted leading-relaxed mb-4">
-        GlycoCart runs on {DEFAULT_MODEL_LABEL} by default. Bring your own key to use a
-        different one. It stays in this browser and is only sent to the provider you pick.
-      </p>
-
-      <div className="space-y-3">
-        <label className="block">
-          <span className="section-label">Provider</span>
+    <Group
+      title="Model"
+      footer={
+        <>
+          GlycoCart runs on {DEFAULT_MODEL_LABEL} through NVIDIA by default, at no cost to you.
+          A key you add stays in this browser and is only sent to the provider you pick.
+        </>
+      }
+    >
+      <label className="flex items-center justify-between gap-3 min-h-12 px-4">
+        <span className="text-sm">Provider</span>
+        <span className="relative inline-flex items-center">
           <select
             value={ai.provider}
             onChange={(e) => update({ provider: e.target.value as Provider, model: "" })}
-            className="mt-1.5 w-full bg-cream border border-ink/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-leaf"
+            className="appearance-none bg-transparent text-sm text-ink-soft text-right pr-6 py-2 min-h-11 outline-none focus-visible:ring-2 focus-visible:ring-leaf rounded-lg cursor-pointer"
           >
-            <option value="nvidia">NVIDIA</option>
-            <option value="openrouter">OpenRouter</option>
+            <option value="nvidia">NVIDIA (free default)</option>
+            <option value="openrouter">OpenRouter (your key)</option>
           </select>
-        </label>
+          <ChevronDown size={15} className="absolute right-0 text-ink-muted pointer-events-none" aria-hidden />
+        </span>
+      </label>
 
-        <label className="block">
-          <span className="section-label">Model</span>
-          <ModelCombobox
-            models={models}
-            value={ai.model}
-            onChange={(model) => update({ model })}
-            isLoading={loadingModels}
-          />
-        </label>
-
-        <label className="block">
-          <span className="section-label">API key (optional)</span>
-          <span className="relative mt-1.5 block">
-            <input
-              type={showKey ? "text" : "password"}
-              placeholder={KEY_PREFIX[ai.provider] + "…"}
-              value={ai.apiKey}
-              onChange={(e) => update({ apiKey: e.target.value })}
-              className={cn(
-                "bg-cream border rounded-xl pl-3 pr-16 py-2.5 text-sm w-full outline-none transition-colors",
-                keyStatus === "valid"
-                  ? "border-leaf"
-                  : keyStatus === "invalid"
-                    ? "border-ember"
-                    : "border-ink/10 focus:border-leaf"
-              )}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              {keyStatus === "checking" && <Loader2 size={14} className="text-leaf animate-spin" />}
-              {keyStatus === "valid" && <CheckCircle2 size={14} className="text-leaf-text" />}
-              {keyStatus === "invalid" && <XCircle size={14} className="text-ember-text" />}
-              <button
-                type="button"
-                onClick={() => setShowKey(!showKey)}
-                className="text-ink-muted hover:text-ink transition-colors"
-                aria-label={showKey ? "Hide API key" : "Show API key"}
-              >
-                {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </span>
+      <div className="px-4 py-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <label htmlFor={keyId} className="text-sm">
+            API key
+          </label>
+          <span className="text-xs text-ink-muted">
+            {ai.provider === "openrouter" ? "Required" : "Optional"}
           </span>
-          {keyStatus === "invalid" && (
-            <span className="block text-xs text-ember-text mt-1.5">
-              A {ai.provider} key starts with {KEY_PREFIX[ai.provider]}
-            </span>
+        </div>
+        <div className="relative mt-2">
+          <input
+            id={keyId}
+            type={showKey ? "text" : "password"}
+            placeholder={KEY_PREFIX[ai.provider] + "…"}
+            value={ai.apiKey}
+            onChange={(e) => update({ apiKey: e.target.value })}
+            autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-invalid={keyStatus === "malformed" || keyStatus === "rejected" || undefined}
+            aria-describedby={keyHelpId}
+            className={cn(
+              "bg-cream border rounded-xl pl-3 pr-12 py-2.5 min-h-11 text-sm font-mono w-full outline-none transition-colors",
+              keyStatus === "valid"
+                ? "border-leaf"
+                : keyStatus === "malformed" || keyStatus === "rejected"
+                  ? "border-ember"
+                  : needsKey
+                    ? "border-ember/60 focus:border-leaf"
+                    : "border-ink/10 focus:border-leaf"
+            )}
+          />
+          <button
+            type="button"
+            onClick={() => setShowKey(!showKey)}
+            className="absolute right-0 top-1/2 -translate-y-1/2 size-11 inline-flex items-center justify-center rounded-xl text-ink-muted hover:text-ink transition-colors"
+            aria-label={showKey ? "Hide API key" : "Show API key"}
+            aria-pressed={showKey}
+          >
+            {showKey ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
+          </button>
+        </div>
+        <p
+          id={keyHelpId}
+          aria-live="polite"
+          className={cn(
+            "flex items-start gap-1.5 text-xs leading-relaxed mt-2",
+            keyMessage.tone === "bad" ? "text-ember-text" : keyMessage.tone === "good" ? "text-leaf-text" : "text-ink-muted"
           )}
-        </label>
+        >
+          {keyStatus === "checking" && <Loader2 size={12} className="animate-spin mt-0.5 shrink-0" aria-hidden />}
+          {keyStatus === "valid" && <Check size={12} className="mt-0.5 shrink-0" aria-hidden />}
+          <span>{keyMessage.text}</span>
+        </p>
+        {needsKey && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => update({ provider: "nvidia", model: "" })}
+              className="inline-flex items-center min-h-11 px-4 rounded-full border border-ink/10 text-sm text-ink-soft hover:text-ink"
+            >
+              Use NVIDIA instead
+            </button>
+            <a
+              href="https://openrouter.ai/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 min-h-11 px-4 rounded-full text-sm text-leaf-text hover:bg-cream-deep/60"
+            >
+              Get an OpenRouter key <ExternalLink size={13} aria-hidden />
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
+          </div>
+        )}
       </div>
-    </section>
+
+      <div className="px-4 py-3">
+        <span id={modelLabelId} className="block text-sm">
+          Model
+        </span>
+        {pickerBlocked ? (
+          <p className="mt-2 text-sm text-ink-muted leading-relaxed">
+            {needsKey
+              ? "Add an OpenRouter key to choose a model."
+              : `Fix the API key to load ${providerName} models.`}
+          </p>
+        ) : (
+          <>
+            <ModelCombobox
+              labelledBy={modelLabelId}
+              models={models}
+              value={ai.model}
+              defaultLabel={defaultLabel}
+              onChange={(model) => update({ model })}
+              isLoading={loadingModels}
+            />
+            {modelsError && (
+              <p className="text-xs text-ink-muted leading-relaxed mt-2">
+                {modelsError} The default model still works.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </Group>
   );
 }
 
 function ModelCombobox({
-  models, value, onChange, isLoading
+  labelledBy,
+  models,
+  value,
+  defaultLabel,
+  onChange,
+  isLoading
 }: {
-  models: any[]; value: string; onChange: (val: string) => void; isLoading: boolean;
+  labelledBy: string;
+  models: ModelInfo[];
+  value: string;
+  defaultLabel: string;
+  onChange: (val: string) => void;
+  isLoading: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const currentId = useId();
 
+  const q = query.toLowerCase();
   const filtered = models.filter(
-    (m) =>
-      m.name.toLowerCase().includes(query.toLowerCase()) ||
-      m.id.toLowerCase().includes(query.toLowerCase())
+    (m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
   );
   const selected = models.find((m) => m.id === value);
 
+  function choose(id: string) {
+    onChange(id);
+    setOpen(false);
+    setQuery("");
+  }
+
   return (
-    <span className="relative block mt-1.5">
+    <div
+      className="relative mt-2"
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && open) {
+          e.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 bg-cream border border-ink/10 rounded-xl px-3 py-2.5 text-sm hover:border-leaf transition-colors text-left"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-labelledby={`${labelledBy} ${currentId}`}
+        className="flex w-full min-h-11 items-center gap-2 bg-cream border border-ink/10 rounded-xl px-3 py-2.5 text-sm hover:border-leaf transition-colors text-left"
       >
-        <span className="flex-1 truncate">
-          {isLoading ? "Loading models…" : selected ? selected.name : value || `${DEFAULT_MODEL_LABEL} (default)`}
+        <span id={currentId} className="flex-1 truncate">
+          {isLoading ? "Loading models…" : selected ? selected.name : value || defaultLabel}
         </span>
-        <ChevronDown size={15} className="text-ink-muted shrink-0" />
+        <ChevronDown size={15} className="text-ink-muted shrink-0" aria-hidden />
       </button>
 
       {open && (
         <>
-          <span className="fixed inset-0 z-40 block" onClick={() => setOpen(false)} />
-          <span className="absolute top-full mt-1 left-0 right-0 z-50 bg-cream border border-ink/10 rounded-xl shadow-lg overflow-hidden flex flex-col max-h-72 animate-fade-up">
-            <span className="p-2 border-b border-ink/5 bg-cream-warm block">
-              <span className="flex items-center gap-2 bg-cream border border-ink/10 rounded-lg px-2 py-1.5 focus-within:border-leaf transition-colors">
-                <Search size={13} className="text-ink-muted" />
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
+          <div
+            role="dialog"
+            aria-label="Choose a model"
+            className="absolute top-full mt-1 left-0 right-0 z-50 bg-cream border border-ink/10 rounded-xl shadow-lg overflow-hidden flex flex-col max-h-80"
+          >
+            <div className="p-2 border-b border-ink/10 bg-cream-warm">
+              <div className="flex items-center gap-2 bg-cream border border-ink/10 rounded-lg px-2 min-h-11 focus-within:border-leaf transition-colors">
+                <Search size={14} className="text-ink-muted shrink-0" aria-hidden />
                 <input
                   autoFocus
-                  className="bg-transparent border-none outline-none text-sm flex-1 min-w-0"
+                  type="search"
+                  aria-label="Search models"
+                  className="bg-transparent border-none outline-none text-sm flex-1 min-w-0 py-2"
                   placeholder="Search models…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
-              </span>
-            </span>
-            <span className="overflow-y-auto flex-1 p-1 block">
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1 p-1">
+              {!query && (
+                <OptionRow active={!value} onClick={() => choose("")} name={defaultLabel} />
+              )}
               {filtered.map((m) => {
                 const isFree =
-                  parseFloat(m.pricing?.prompt) === 0 && parseFloat(m.pricing?.completion) === 0;
+                  parseFloat(m.pricing?.prompt ?? "") === 0 && parseFloat(m.pricing?.completion ?? "") === 0;
                 return (
-                  <span
+                  <OptionRow
                     key={m.id}
-                    onClick={() => { onChange(m.id); setOpen(false); setQuery(""); }}
-                    className={cn(
-                      "flex flex-col gap-1 p-2.5 rounded-lg cursor-pointer transition-colors",
-                      value === m.id ? "bg-leaf-pale" : "hover:bg-cream-warm"
-                    )}
-                  >
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm truncate flex-1">{m.name}</span>
-                      {isFree ? (
-                        <span className="mono text-xs text-leaf-text shrink-0">free</span>
-                      ) : (
-                        <span className="mono text-xs text-ink-muted shrink-0 inline-flex items-center gap-1">
-                          paid <Info size={9} />
-                        </span>
-                      )}
-                    </span>
-                    <span className="font-mono text-xs text-ink-muted truncate">{m.id}</span>
-                  </span>
+                    active={value === m.id}
+                    onClick={() => choose(m.id)}
+                    name={m.name}
+                    id={m.id}
+                    price={isFree ? "free" : "paid"}
+                  />
                 );
               })}
-              {filtered.length === 0 && (
-                <span className="block p-4 text-center text-sm text-ink-muted">No models found</span>
+              {isLoading && (
+                <p className="p-4 text-center text-sm text-ink-muted" role="status">
+                  Loading models…
+                </p>
               )}
-            </span>
-          </span>
+              {!isLoading && filtered.length === 0 && (
+                <p className="p-4 text-center text-sm text-ink-muted">
+                  {query ? "No models match that search." : "No other models to show."}
+                </p>
+              )}
+            </div>
+          </div>
         </>
       )}
-    </span>
+    </div>
+  );
+}
+
+function OptionRow({
+  active,
+  onClick,
+  name,
+  id,
+  price
+}: {
+  active: boolean;
+  onClick: () => void;
+  name: string;
+  id?: string;
+  price?: "free" | "paid";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "w-full text-left flex flex-col gap-1 p-2.5 min-h-11 rounded-lg transition-colors",
+        active ? "bg-leaf-pale" : "hover:bg-cream-warm"
+      )}
+    >
+      <span className="flex items-center justify-between gap-2 w-full">
+        <span className="font-medium text-sm truncate flex-1">{name}</span>
+        {price && (
+          <span className={cn("mono !text-xs shrink-0", price === "free" ? "text-leaf-text" : "text-ink-muted")}>
+            {price}
+          </span>
+        )}
+      </span>
+      {id && <span className="font-mono text-xs text-ink-muted truncate w-full">{id}</span>}
+    </button>
   );
 }

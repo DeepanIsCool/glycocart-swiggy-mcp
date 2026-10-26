@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { BottomNav } from "@/components/bottom-nav";
@@ -15,10 +17,16 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <main className="app-scroll px-5 md:px-10 py-8">
-        <div className="max-w-2xl mx-auto mb-6">
-          <h1 className="display text-4xl leading-tight">Settings</h1>
-        </div>
+      {/* Settings has no tab of its own; it is pushed from Profile, so it gets
+          a back control rather than leaving the tab bar as the only way out. */}
+      <header className="app-bar">
+        <Link href="/profile" className="app-bar-action" aria-label="Back to Profile">
+          <ChevronLeft size={22} aria-hidden />
+        </Link>
+        <h1 className="text-base font-semibold">Settings</h1>
+        <span className="size-11" aria-hidden />
+      </header>
+      <main className="app-scroll px-4 md:px-10 pt-6">
         <SettingsView
           currentAddressId={profile.defaultAddressId}
           currentAddressLabel={profile.defaultAddressLabel}
