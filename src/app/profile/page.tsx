@@ -1,12 +1,50 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { MapPin, Pencil, Info, Settings as SettingsIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import { MapPin, Pencil, Settings as SettingsIcon } from "lucide-react";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { BottomNav } from "@/components/bottom-nav";
-import { CONDITIONS } from "@/lib/profile";
+import { CONDITIONS, type CalibrationAnswers, type UserProfile } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
+
+const CRASHES: Record<CalibrationAnswers["crashes"], string> = {
+  never: "Rarely",
+  sometimes: "Sometimes",
+  often: "Often"
+};
+const ACTIVITY: Record<CalibrationAnswers["activity"], string> = {
+  sedentary: "Mostly sitting",
+  light: "Light",
+  moderate: "Moderate",
+  very: "Very active"
+};
+const GOAL: Record<CalibrationAnswers["goal"], string> = {
+  lose: "Lose weight",
+  maintain: "Maintain",
+  gain: "Gain weight"
+};
+
+/**
+ * The calorie target has no derivation line in the metabolic profile, so the
+ * explanation is rebuilt here from the same rule `deriveCalorieTarget` uses:
+ * Mifflin-St Jeor only when age, height and weight are all present, otherwise
+ * a fixed default per goal.
+ */
+function calorieExplanation(p: UserProfile): string {
+  const { age, heightCm, weightKg, sex } = p.answers;
+  if (age && heightCm && weightKg) {
+    const inputs =
+      sex === "male" || sex === "female"
+        ? "your age, height, weight, sex and activity level"
+        : "your age, height, weight and activity level, halfway between the male and female formulas since sex wasn't given";
+    const adjust =
+      p.goal === "lose" ? ", then 15% lower for weight loss" : p.goal === "gain" ? ", then 10% higher to gain" : "";
+    return `Daily target ${p.dailyCalTarget} kcal from the Mifflin-St Jeor equation, using ${inputs}${adjust}. Rounded to the nearest 50.`;
+  }
+  return `Daily target ${p.dailyCalTarget} kcal is the default for your goal, because age, height and weight weren't all given. Add them to calculate one for you.`;
+}
 
 export default async function ProfilePage() {
   const uid = await getSessionUid();
@@ -16,7 +54,31 @@ export default async function ProfilePage() {
   if (!profile) redirect("/onboarding");
 
   const m = profile.metabolic;
+  const ans = profile.answers;
   const conditionBlurb = CONDITIONS.find((c) => c.id === profile.condition)?.blurb;
+
+  const answered: { label: string; value: string }[] = [
+    { label: "Managing", value: profile.conditionLabel },
+    { label: "HbA1c", value: typeof ans.hba1c === "number" ? `${ans.hba1c}%` : "Not given" },
+    {
+      label: "Fasting glucose",
+      value: typeof ans.fastingGlucose === "number" ? `${ans.fastingGlucose} mg/dL` : "Not given"
+    },
+    { label: "Crash after carbs", value: CRASHES[ans.crashes] ?? ans.crashes },
+    { label: "Activity", value: ACTIVITY[ans.activity] ?? ans.activity },
+    { label: "Goal", value: GOAL[ans.goal] ?? ans.goal },
+    {
+      label: "Body",
+      value:
+        [
+          ans.age ? `${ans.age} years` : null,
+          ans.heightCm ? `${ans.heightCm} cm` : null,
+          ans.weightKg ? `${ans.weightKg} kg` : null
+        ]
+          .filter(Boolean)
+          .join(", ") || "Not given"
+    }
+  ];
 
   return (
     <>
@@ -24,26 +86,20 @@ export default async function ProfilePage() {
         <div className="max-w-2xl mx-auto">
           <header className="flex items-start justify-between gap-4 mb-8">
             <div className="min-w-0">
-              <h1 className="display text-4xl leading-tight">{profile.displayName}</h1>
+              <h1 className="display text-4xl leading-tight break-words">{profile.displayName}</h1>
               <p className="text-ink-soft mt-1">{profile.conditionLabel}</p>
               {conditionBlurb && <p className="text-ink-muted text-sm mt-1">{conditionBlurb}</p>}
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <Link href="/onboarding" className="btn-ghost" aria-label="Edit profile">
-                <Pencil size={14} /> edit
-              </Link>
-              {/* Settings gave up its nav tab to Dine out; this is its way in. */}
-              <Link href="/settings" className="btn-ghost" aria-label="Settings">
-                <SettingsIcon size={15} />
-              </Link>
-            </div>
+            {/* Settings gave up its nav tab to Dine out; this is its way in. */}
+            <Link href="/settings" className="app-bar-action shrink-0 -mr-2" aria-label="Settings">
+              <SettingsIcon size={20} aria-hidden="true" />
+            </Link>
           </header>
 
-          {/* Delivery address */}
           <Card title="Delivering to">
             {profile.defaultAddressLabel ? (
               <div className="flex items-start gap-2.5">
-                <MapPin size={16} className="text-ink-muted mt-0.5 shrink-0" />
+                <MapPin size={16} className="text-ink-muted mt-0.5 shrink-0" aria-hidden="true" />
                 <p className="text-sm text-ink-soft line-clamp-2">{profile.defaultAddressLabel}</p>
               </div>
             ) : (
@@ -57,47 +113,63 @@ export default async function ProfilePage() {
             )}
           </Card>
 
-          {/* The numbers, and how they were arrived at */}
-          <Card title="Your numbers">
-            <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-              <Stat label="fasting baseline" value={`${m.fastingBaseline}`} unit="mg/dL" />
-              <Stat label="carb sensitivity" value={m.insulinSensitivity.toFixed(2)} />
-              <Stat label="daily target" value={`${profile.dailyCalTarget}`} unit="kcal" />
-            </div>
+          <Card title="Your estimated numbers">
+            <dl className="grid grid-cols-3 gap-2 mb-3 text-center">
+              <Stat label="Fasting baseline" value={`${m.fastingBaseline}`} unit="mg/dL" />
+              <Stat label="Carb sensitivity" value={m.insulinSensitivity.toFixed(2)} />
+              <Stat label="Daily target" value={`${profile.dailyCalTarget}`} unit="kcal" />
+            </dl>
+            <p className="text-sm text-ink-muted leading-relaxed mb-5">
+              GlycoCart uses these to rank dishes for you. They are estimates from
+              your answers, not clinical measurements, and not medical advice.
+            </p>
 
-            <div className="rounded-xl bg-cream p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Info size={14} className="text-ink-muted" />
-                <span className="section-label">How we got these</span>
-              </div>
-              <ul className="space-y-2">
-                {m.derivation.map((line, i) => (
+            <h3 className="text-sm font-medium text-ink mb-2">How each was worked out</h3>
+            <ul className="space-y-2 mb-5">
+              {[...m.derivation.slice(0, -1), calorieExplanation(profile), ...m.derivation.slice(-1)].map(
+                (line, i) => (
                   <li key={i} className="text-sm text-ink-soft leading-relaxed flex gap-2">
-                    <span className="text-ink-muted shrink-0">·</span>
+                    <span className="text-ink-muted shrink-0" aria-hidden="true">
+                      ·
+                    </span>
                     <span>{line}</span>
                   </li>
-                ))}
-              </ul>
-            </div>
+                )
+              )}
+            </ul>
+
+            <h3 className="text-sm font-medium text-ink mb-2">From your answers</h3>
+            <dl className="divide-y divide-ink/10 border-y border-ink/10">
+              {answered.map((row) => (
+                <div key={row.label} className="flex items-baseline justify-between gap-4 py-2">
+                  <dt className="text-sm text-ink-muted shrink-0">{row.label}</dt>
+                  <dd className="text-sm text-ink text-right min-w-0">{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <Link href="/onboarding" className="btn-primary min-h-11 mt-5">
+              <Pencil size={15} aria-hidden="true" /> Change answers
+            </Link>
           </Card>
 
-          {/* Food preferences — sections hide entirely when empty */}
           {(m.triggers.length > 0 ||
             m.safeFoods.length > 0 ||
             profile.dietary.length > 0 ||
             profile.blocklist.length > 0) && (
             <Card title="Food">
               <div className="space-y-4">
-                <ChipRow label="spikes me" items={m.triggers} tone="ember" />
-                <ChipRow label="sits well" items={m.safeFoods} tone="leaf" />
-                <ChipRow label="dietary" items={profile.dietary} />
-                <ChipRow label="avoiding" items={profile.blocklist} />
+                <ChipRow label="Spikes me" items={m.triggers} tone="ember" />
+                <ChipRow label="Sits well" items={m.safeFoods} tone="leaf" />
+                <ChipRow label="Dietary" items={profile.dietary} />
+                <ChipRow label="Avoiding" items={profile.blocklist} />
               </div>
             </Card>
           )}
 
-          <p className="mono text-ink-muted text-xs mt-6">
-            updated {new Date(profile.updatedAt).toLocaleDateString("en-IN", {
+          <p className="text-ink-muted text-sm mt-6">
+            Last updated{" "}
+            {new Date(profile.updatedAt).toLocaleDateString("en-IN", {
               day: "numeric",
               month: "short",
               year: "numeric"
@@ -110,7 +182,7 @@ export default async function ProfilePage() {
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="card-solid p-5 mb-4">
       <h2 className="section-label mb-3">{title}</h2>
@@ -121,12 +193,12 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="bg-cream py-3 px-2 rounded-lg">
-      <div className="text-lg font-medium leading-none">
+    <div className="bg-cream py-3 px-2 rounded-lg flex flex-col-reverse">
+      <dt className="text-xs text-ink-muted mt-1.5 leading-tight">{label}</dt>
+      <dd className="text-lg font-medium leading-none">
         {value}
         {unit && <span className="text-xs text-ink-muted ml-0.5">{unit}</span>}
-      </div>
-      <div className="mono text-ink-muted text-xs mt-1.5 leading-tight">{label}</div>
+      </dd>
     </div>
   );
 }
@@ -149,14 +221,14 @@ function ChipRow({
         : "bg-cream border-ink/10 text-ink-soft";
   return (
     <div>
-      <p className="section-label mb-2">{label}</p>
-      <div className="flex flex-wrap gap-2">
+      <h3 className="section-label mb-2">{label}</h3>
+      <ul className="flex flex-wrap gap-2">
         {items.map((item) => (
-          <span key={item} className={`rounded-full border px-3 py-1 text-sm ${toneClass}`}>
+          <li key={item} className={`rounded-full border px-3 py-1 text-sm ${toneClass}`}>
             {item}
-          </span>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }

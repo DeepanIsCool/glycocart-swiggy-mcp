@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { OnboardingWizard } from "@/components/onboarding-wizard";
@@ -17,13 +18,17 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <main className="relative min-h-dvh px-5 md:px-10 py-10">
-      <header className="max-w-2xl mx-auto flex items-center gap-3 mb-10">
-        <Image src="/glycocart_logo.png" alt="GlycoCart" width={36} height={36} className="rounded-full" />
+    <main className="relative min-h-dvh px-5 md:px-10 py-8">
+      {/* The step count lives in the wizard, next to the progress bar. The old
+          "step 1 of 2" label here described a flow that no longer exists. */}
+      <header className="max-w-2xl mx-auto flex items-center gap-3 mb-8 min-h-11">
+        <Image src="/glycocart_logo.png" alt="" width={32} height={32} className="rounded-full" />
         <span className="display text-lg font-medium">GlycoCart</span>
-        <span className="mono text-ink-muted text-xs ml-auto">
-          {existing ? "edit profile" : "step 1 of 2 · your profile"}
-        </span>
+        {existing && (
+          <Link href="/profile" className="btn-ghost min-h-11 ml-auto -mr-3">
+            Cancel
+          </Link>
+        )}
       </header>
 
       <OnboardingWizard initial={existing?.answers} />
