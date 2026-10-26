@@ -26,6 +26,14 @@ export async function GET() {
 
   try {
     const addrRes = await callSwiggyRaw(client, "get_addresses", {});
+    // A failed lookup used to come back as an empty list with HTTP 200, so
+    // Settings said "No saved addresses on your Swiggy account".
+    if (addrRes?.success === false) {
+      return NextResponse.json(
+        { error: addrRes.error?.message ?? "Swiggy didn't return your addresses." },
+        { status: 502 }
+      );
+    }
     const addresses = (unwrapSwiggy(addrRes)?.addresses ?? []).map((a: any) => ({
       id: a.id,
       addressLine: a.addressLine,

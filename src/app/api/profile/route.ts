@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 const answersSchema = z.object({
   displayName: z.string().trim().max(60).default(""),
   defaultAddressId: z.string().trim().max(120).optional(),
-  defaultAddressLabel: z.string().trim().max(200).optional(),
+  defaultAddressLabel: z.string().trim().transform((v) => v.slice(0, 200)).optional(),
   condition: z.enum(["general", "pcos", "pcos_ir", "prediabetes", "t2d"]),
   hba1c: z.coerce.number().min(3).max(20).optional(),
   fastingGlucose: z.coerce.number().min(40).max(400).optional(),
@@ -21,9 +21,9 @@ const answersSchema = z.object({
   heightCm: z.coerce.number().min(100).max(230).optional(),
   weightKg: z.coerce.number().min(25).max(300).optional(),
   dietary: z.array(z.string().trim().max(40)).max(20).default([]),
-  blocklist: z.array(z.string().trim().max(40)).max(40).default([]),
-  triggers: z.array(z.string().trim().max(40)).max(40).default([]),
-  safeFoods: z.array(z.string().trim().max(40)).max(40).default([])
+  blocklist: z.array(z.string().trim().max(60)).max(40).default([]),
+  triggers: z.array(z.string().trim().max(60)).max(40).default([]),
+  safeFoods: z.array(z.string().trim().max(60)).max(40).default([])
 });
 
 export async function GET() {

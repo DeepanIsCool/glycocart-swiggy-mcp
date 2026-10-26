@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
-import { getDineoutClient } from "@/lib/swiggy-mcp-client";
+import { getDineoutClient, hasSwiggySession } from "@/lib/swiggy-mcp-client";
 import { dineoutSearch } from "@/lib/dineout-tools";
 
 export const runtime = "nodejs";
@@ -17,9 +17,19 @@ export async function GET(req: Request) {
   const profile = await getProfile(uid);
   if (!profile) return NextResponse.json({ error: "Finish onboarding first." }, { status: 403 });
 
+  if (!profile.defaultAddressId) {
+    return NextResponse.json(
+      { error: "Pick a delivery address in Settings. Dineout searches near it.", needsAddress: true },
+      { status: 400 }
+    );
+  }
+
   const client = await getDineoutClient();
   if (!client) {
-    return NextResponse.json({ error: "Swiggy Dineout isn't reachable right now." }, { status: 502 });
+    // No Swiggy session at all is a sign-in problem, not an outage.
+    return (await hasSwiggySession())
+      ? NextResponse.json({ error: "Swiggy Dineout isn't reachable right now." }, { status: 502 })
+      : NextResponse.json({ error: "Your Swiggy session has expired.", reconnect: true }, { status: 401 });
   }
 
   const params = new URL(req.url).searchParams;

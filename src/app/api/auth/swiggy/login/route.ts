@@ -12,16 +12,25 @@ export async function GET(req: Request) {
   try {
     // See swiggy-mcp-client.ts: Swiggy's auth-server metadata issuer doesn't match its
     // discovery URL (confirmed via IssuerMismatchError) — sanctioned opt-out, not a guess.
-    result = await auth(provider, { serverUrl: SWIGGY_FOOD_MCP_URL, skipIssuerMetadataValidation: true });
+    //
+    // forceReauthorization: someone tapping "Sign in" or "Reconnect" means it.
+    // Silently refreshing instead skipped the callback, so the app session
+    // (gc_uid) was never set and /chat bounced straight back to "/", forever.
+    // It also meant a different Swiggy account could never sign in here.
+    result = await auth(provider, {
+      serverUrl: SWIGGY_FOOD_MCP_URL,
+      skipIssuerMetadataValidation: true,
+      forceReauthorization: true
+    });
   } catch (err) {
     console.error("Swiggy login start failed", err);
     return NextResponse.redirect(new URL("/?connect_error=login_failed", req.url));
   }
 
-  // Already holding valid tokens — the callback route owns identity resolution,
-  // so bounce through it rather than duplicating that logic here.
+  // With forceReauthorization this should not happen; if it does, the
+  // callback is the only place identity is resolved, so don't skip it.
   if (result === "AUTHORIZED") {
-    return NextResponse.redirect(new URL("/chat", req.url));
+    return NextResponse.redirect(new URL("/?connect_error=login_failed", req.url));
   }
 
   const redirectUrl = provider.consumeRedirectUrl();

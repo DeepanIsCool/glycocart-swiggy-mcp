@@ -87,8 +87,9 @@ async function connectTo(serverUrl: string): Promise<Client | null> {
  * stable per browser, which is honest about what we can actually guarantee.
  */
 export async function resolveUid(existingUid: string | null): Promise<string> {
-  if (existingUid) return existingUid;
-
+  // The account's own id wins over whatever this browser held before. Checking
+  // the existing cookie first meant a second Swiggy account signing in on the
+  // same browser inherited the first person's health profile.
   try {
     const provider = new CookieOAuthProvider(SWIGGY_REDIRECT_URI);
     const tokens = await provider.tokens();
@@ -98,7 +99,7 @@ export async function resolveUid(existingUid: string | null): Promise<string> {
     console.error("Could not read subject from access token", err);
   }
 
-  return randomUUID();
+  return existingUid ?? randomUUID();
 }
 
 /** Reads the `sub` claim without verifying — the token came from our own OAuth exchange. */

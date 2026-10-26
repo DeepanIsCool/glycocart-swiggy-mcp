@@ -19,8 +19,7 @@ export async function GET() {
     STORAGE_DATABASE_URL: !!process.env.STORAGE_DATABASE_URL,
     SWIGGY_TOKEN_SECRET: !!process.env.SWIGGY_TOKEN_SECRET,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? null,
-    NVIDIA_API_KEY: !!process.env.NVIDIA_API_KEY,
-    OPENROUTER_API_KEY: !!process.env.OPENROUTER_API_KEY
+    NVIDIA_API_KEY: !!process.env.NVIDIA_API_KEY
   };
 
   if (!url) {

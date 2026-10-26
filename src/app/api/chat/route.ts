@@ -5,21 +5,33 @@ import type { UserProfile } from "@/lib/profile";
 import { getSwiggyClient, getInstamartClient, getDineoutClient } from "@/lib/swiggy-mcp-client";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
-import { appendMessages } from "@/lib/sessions";
-import { getBudget, budgetSummary } from "@/lib/daily-log";
+import { appendMessages, getMessages } from "@/lib/sessions";
+import { sanitizeHistory, slimToolResults, turnToStore } from "@/lib/chat-history";
+import { budgetFromOrders, budgetSummary } from "@/lib/daily-log";
+import { buildOrderTools } from "@/lib/orders-tools";
+import { resolveAiConfig } from "@/lib/ai-provider";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { messages, provider, customModel, customApiKey, sessionId } = body as {
-    messages: any[];
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return new Response(JSON.stringify({ error: "Invalid request." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+  const { provider, customModel, customApiKey, sessionId, retry } = body as {
     provider?: "openrouter" | "nvidia";
     customModel?: string;
     customApiKey?: string;
     sessionId?: string;
+    retry?: boolean;
   };
+  // Drop tool calls that never got a result (a Stop mid-tool, or a tool that
+  // threw). The SDK's converter throws on them, which broke the whole chat.
+  const messages = sanitizeHistory((body as { messages?: unknown }).messages);
 
   // Identity comes from the signed session, never from the request body — the
   // client must not be able to choose whose metabolic profile gets applied.
@@ -39,35 +51,20 @@ export async function POST(req: Request) {
     });
   }
 
-  const useNvidia = provider === "nvidia";
-  const resolvedApiKey = customApiKey || (useNvidia ? process.env.NVIDIA_API_KEY : process.env.OPENROUTER_API_KEY);
-
-  if (!resolvedApiKey) {
-    return new Response(
-      JSON.stringify({ error: "API Key is required. Please enter your API Key in the settings (BYOK) to test the product." }),
-      { status: 401, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  if (useNvidia && !resolvedApiKey.startsWith("nvapi-")) {
-    return new Response(
-      JSON.stringify({ error: "Invalid API Key for NVIDIA. NVIDIA API keys must start with 'nvapi-'." }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  if (!useNvidia && !resolvedApiKey.startsWith("sk-or-v1-")) {
-    return new Response(
-      JSON.stringify({ error: "Invalid API Key for OpenRouter. OpenRouter API keys must start with 'sk-or-v1-'." }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
+  // The server key is NVIDIA only; OpenRouter always runs on the user's own key.
+  const ai = resolveAiConfig({ provider, customApiKey, customModel }, process.env);
+  if (!ai.ok) {
+    return new Response(JSON.stringify({ error: ai.error }), {
+      status: ai.status,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 
   const aiProvider = createOpenAI({
-    baseURL: useNvidia ? "https://integrate.api.nvidia.com/v1" : "https://openrouter.ai/api/v1",
-    apiKey: resolvedApiKey,
+    baseURL: ai.baseURL,
+    apiKey: ai.apiKey,
     compatibility: "compatible",
-    headers: useNvidia ? undefined : {
+    headers: ai.provider === "nvidia" ? undefined : {
       "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
       "X-Title": "GlycoCart"
     }
@@ -81,61 +78,61 @@ export async function POST(req: Request) {
     );
   }
 
+  // What they've already ordered today changes what to recommend now. Read
+  // from today's Swiggy orders, bounded so a slow history never delays a reply.
+  const todaysOrders = profile.defaultAddressId
+    ? Promise.race([
+        buildOrderTools(swiggyClient, profile)
+          .get_food_orders.execute({ addressId: profile.defaultAddressId }, { toolCallId: "budget", messages: [] })
+          .then((r: any) => (Array.isArray(r?.orders) ? r.orders : null)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
+      ]).catch(() => null)
+    : Promise.resolve(null);
+
   // Groceries and dining out are bonus surfaces; never block a reply on them.
-  const [instamartClient, dineoutClient] = await Promise.all([
+  const [instamartClient, dineoutClient, orders] = await Promise.all([
     getInstamartClient().catch(() => null),
-    getDineoutClient().catch(() => null)
+    getDineoutClient().catch(() => null),
+    todaysOrders
   ]);
   const tools = buildToolset(profile, swiggyClient, instamartClient, dineoutClient);
 
-  // What they've already eaten today changes what to recommend now.
-  let todaysBudget = "";
-  try {
-    todaysBudget = budgetSummary(await getBudget(uid, profile));
-  } catch (err) {
-    console.error("Could not read daily budget", err);
-  }
+  const todaysBudget = orders
+    ? budgetSummary(budgetFromOrders(orders, profile))
+    : "Today's Swiggy orders couldn't be read, so what they've eaten today is unknown.";
 
   const systemPrompt = buildSystemPrompt(profile, !!instamartClient, !!dineoutClient, todaysBudget);
   
-  const defaultModel = useNvidia
-    ? (process.env.NVIDIA_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b")
-    : (process.env.OPENROUTER_MODEL ?? "anthropic/claude-3.5-sonnet");
-  const modelChoice = customModel || defaultModel;
-  
-  const model = aiProvider(modelChoice);
+  const model = aiProvider(ai.model);
 
   const result = streamText({
     model,
     system: systemPrompt,
-    messages: convertToCoreMessages(messages),
+    messages: convertToCoreMessages(slimToolResults(messages) as any),
     tools,
     maxSteps: 6,
     temperature: 0.4,
     // Persist both sides once the turn completes, so a reload restores the
     // conversation. Ownership of sessionId is verified inside appendMessages.
-    onFinish: async ({ text, toolCalls, toolResults, steps }) => {
+    onFinish: async ({ steps }) => {
       if (!sessionId) return;
-      const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
-
-      // `toolCalls`/`toolResults` describe only the FINAL step. With maxSteps the
-      // last step is the text reply, so both were always empty and no tool
-      // result was ever saved — reopening a chat lost every card. Flatten every
-      // step instead.
-      const allCalls = steps?.flatMap((s: any) => s.toolCalls ?? []) ?? toolCalls ?? [];
-      const allResults = steps?.flatMap((s: any) => s.toolResults ?? []) ?? toolResults ?? [];
+      const lastUser = [...messages].reverse().find((m) => m.role === "user");
+      // Only calls that got a result are saved, so a reopened chat never holds
+      // an unresolved call; text is joined across every step.
+      const turn = turnToStore((steps ?? []) as any[]);
 
       try {
+        // "Try again" resends the same question. If it is already the last
+        // question saved, don't save it a second time.
+        let saveUser = !!lastUser;
+        if (saveUser && retry) {
+          const stored = await getMessages(uid, sessionId);
+          const prevUser = [...stored].reverse().find((m) => m.role === "user");
+          saveUser = prevUser?.content !== String(lastUser!.content ?? "");
+        }
         await appendMessages(uid, sessionId, [
-          ...(lastUser ? [{ role: "user" as const, content: String(lastUser.content ?? ""), toolInvocations: null }] : []),
-          {
-            role: "assistant" as const,
-            content: text ?? "",
-            toolInvocations:
-              allCalls.length || allResults.length
-                ? { toolCalls: allCalls, toolResults: allResults }
-                : null
-          }
+          ...(saveUser ? [{ role: "user" as const, content: String(lastUser!.content ?? ""), toolInvocations: null }] : []),
+          { role: "assistant" as const, content: turn.text, toolInvocations: turn.toolInvocations }
         ]);
       } catch (err) {
         // Never fail a reply because history couldn't be written.
@@ -287,6 +284,8 @@ You are a food and metabolic-health assistant, not a general chatbot. If asked s
 
 ## RESPECT THE PROFILE
 Their dietary preferences and avoid-list are not suggestions. Do not recommend a non-veg dish to a vegetarian, or a listed trigger food, without explicitly flagging why you're mentioning it.
+- Dishes carry avoid_matches: the entries from THEIR avoid list the dish name matches. Don't pick one of those as your recommendation when a clean option exists; if you mention one, say which avoid-list entry it matches.
+- For a vegetarian, vegan or Jain profile, non-veg dishes are already removed (diet_excluded says how many). Vegan and Jain have rules a veg flag can't check (dairy, onion, garlic): say so if it matters.
 
 ## RECOVERY
 - Tool returns an address error -> call get_addresses, show the options, ask which; mention they can set a default in Settings.

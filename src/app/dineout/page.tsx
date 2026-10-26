@@ -14,12 +14,14 @@ export default async function DineoutPage() {
 
   return (
     <>
-      <main className="app-scroll px-5 md:px-10 py-8">
+      <main className="app-scroll px-5 md:px-10 pt-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-6">
             <h1 className="display text-4xl leading-tight">Eating out</h1>
             <p className="text-ink-muted text-sm mt-1">
-              Tables you can book on Swiggy Dineout, with a read on what to order there.
+              Places on Swiggy Dineout, with a read on how each cuisine&apos;s typical dishes sit
+              with you. Dineout publishes no menus, so the read is about the cuisine, not the
+              kitchen.
             </p>
           </div>
           <DineoutView addressLabel={profile.defaultAddressLabel} />

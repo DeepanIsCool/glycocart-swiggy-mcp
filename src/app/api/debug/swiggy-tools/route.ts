@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSwiggyClient, getInstamartClient, getDineoutClient } from "@/lib/swiggy-mcp-client";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
+import { isReadOnlyDebugTool } from "@/lib/debug-tools";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,9 @@ export async function GET(req: Request) {
   if (!client) return NextResponse.json({ error: `${server} client unavailable` }, { status: 502 });
 
   if (call) {
+    if (!isReadOnlyDebugTool(call)) {
+      return NextResponse.json({ error: `"${call}" is not a read-only tool` }, { status: 403 });
+    }
     const res = await client.callTool({
       name: call,
       arguments: { addressId: profile?.defaultAddressId, ...args }

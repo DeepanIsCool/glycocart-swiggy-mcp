@@ -72,7 +72,8 @@ function summariseCartGlucose(items: any[], profile: UserProfile) {
  */
 export function mergeCartItems(
   existing: any[],
-  incoming: { menu_item_id?: string; quantity?: number }[]
+  incoming: { menu_item_id?: string; quantity?: number }[],
+  mode: "set" | "add" = "set"
 ): { menu_item_id: string; quantity: number }[] {
   const byId = new Map<string, number>();
   for (const line of existing ?? []) {
@@ -81,7 +82,11 @@ export function mergeCartItems(
   }
   for (const line of incoming) {
     const id = String(line?.menu_item_id ?? "");
-    if (id) byId.set(id, Number(line?.quantity) || 0);
+    if (!id) continue;
+    const q = Number(line?.quantity) || 0;
+    // "add" is what an Add button means: one more of it. Setting 1 instead
+    // reset a dish already in the cart at 3 back to 1, while saying "Added".
+    byId.set(id, mode === "add" ? (byId.get(id) ?? 0) + q : q);
   }
 
   return [...byId.entries()]
@@ -97,10 +102,9 @@ function shapeCart(res: any, profile: UserProfile) {
   return {
     cart_id: data?.cart_id ?? null,
     restaurant: data?.restaurant ?? null,
-    // Which address this cart is priced for. Swiggy carts are per-address, and
-    // a cart built against one address looks "missing" when the Swiggy app has
-    // a different one selected — so always show the user which it is.
-    delivering_to: data?.restaurant?.deliverySubtitle ?? null,
+    // Swiggy's `deliverySubtitle` is the delivery ETA ("35-40 mins"), not an
+    // address. It was shown as "Delivering to 35-40 mins".
+    delivery_eta: data?.restaurant?.deliverySubtitle ?? null,
     items: items.map((i: any) => ({
       menu_item_id: String(i.menu_item_id),
       name: i.name,
@@ -146,9 +150,13 @@ export function buildCartTools(client: Client, profile: UserProfile) {
               quantity: z.coerce.number().min(0)
             })
           )
-          .min(1)
+          .min(1),
+        mode: z
+          .enum(["set", "add"])
+          .optional()
+          .describe("set (default): quantity is the new total. add: quantity is added to what is already in the cart.")
       }),
-      execute: async ({ restaurantId, addressId, restaurantName, cartItems }) => {
+      execute: async ({ restaurantId, addressId, restaurantName, cartItems, mode }) => {
         // Guard the single-restaurant rule server-side. Swiggy silently WIPES the
         // cart when you add from another restaurant — verified live — so this
         // must be caught before the call, not reported after.
@@ -156,7 +164,11 @@ export function buildCartTools(client: Client, profile: UserProfile) {
         // Compare by NAME, not id: the cart response returns only
         // { name, deliverySubtitle } with no restaurant id, so an id comparison
         // silently never matched and the guard never fired.
-        const current = unwrapSwiggy<any>(await callSwiggyRaw(client, "get_food_cart", { addressId }));
+        const read = await callSwiggyRaw(client, "get_food_cart", { addressId });
+        // If the cart can't be read, neither the guard nor the merge can run,
+        // and writing would replace whatever is there. Stop instead.
+        if (read?.success === false) return read;
+        const current = unwrapSwiggy<any>(read);
         const currentName: string | undefined = current?.restaurant?.name;
         const hasItems = (current?.items?.length ?? 0) > 0;
         const sameRestaurant =
@@ -177,7 +189,7 @@ export function buildCartTools(client: Client, profile: UserProfile) {
         // line replaces everything already in it. Adding a second dish silently
         // dropped the first — seen live. Merge what's already there, letting the
         // incoming lines win (including quantity 0, which removes).
-        const merged = mergeCartItems(current?.items ?? [], cartItems);
+        const merged = mergeCartItems(current?.items ?? [], cartItems, mode ?? "set");
 
         // Removing the last line leaves nothing to send, and update_food_cart
         // requires at least one item — emptying is a different call.

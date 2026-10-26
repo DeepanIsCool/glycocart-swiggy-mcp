@@ -1,12 +1,35 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
+import { RecoverIfExpired } from "@/components/session-recovery";
+import { parseOrderedAt } from "@/lib/order-time";
 import { buildOrderTools } from "@/lib/orders-tools";
 import { BottomNav } from "@/components/bottom-nav";
 import { formatINR } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+type LoadError = { message: string; action: "address" | "reconnect" | "retry" };
+
+/**
+ * Swiggy's `orderedTime` may be an epoch value or a date string. Show it only
+ * when it parses, rather than a garbled date. Formatted in IST because every
+ * Swiggy order is in India and this renders on a server whose clock is UTC.
+ */
+function formatOrderedAt(raw: unknown): string | null {
+  const d = parseOrderedAt(raw);
+  if (!d) return typeof raw === "string" && raw.trim() ? raw : null;
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata"
+  }).format(d);
+}
 
 export default async function OrdersPage() {
   const uid = await getSessionUid();
@@ -15,14 +38,14 @@ export default async function OrdersPage() {
   if (!profile) redirect("/onboarding");
 
   let orders: any[] = [];
-  let error: string | null = null;
+  let error: LoadError | null = null;
 
   if (!profile.defaultAddressId) {
-    error = "Pick a delivery address in Settings to see your orders.";
+    error = { message: "Pick a delivery address to see your Swiggy orders.", action: "address" };
   } else {
     const client = await getSwiggyClient();
     if (!client) {
-      error = "Your Swiggy session expired. Reconnect from Settings.";
+      error = { message: "Your Swiggy session has expired.", action: "reconnect" };
     } else {
       try {
         const tools = buildOrderTools(client, profile);
@@ -31,81 +54,150 @@ export default async function OrdersPage() {
           { toolCallId: "page", messages: [] } as any
         );
         orders = res?.orders ?? [];
-        if (res?.success === false) error = "Couldn't load your orders from Swiggy.";
+        if (res?.success === false) {
+          // A saved address deleted in the Swiggy app fails every retry; the
+          // fix is picking another one.
+          error = res?.recovery
+            ? { message: "Your saved delivery address is no longer on your Swiggy account.", action: "address" }
+            : { message: "Swiggy didn't return your orders.", action: "retry" };
+        }
       } catch {
-        error = "Couldn't load your orders from Swiggy.";
+        error = { message: "Swiggy didn't return your orders.", action: "retry" };
       }
     }
   }
 
   return (
     <>
-      <main className="app-scroll px-5 md:px-10 py-8">
+      <main className="app-scroll px-5 md:px-10 pt-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-6">
             <h1 className="display text-4xl leading-tight">Orders</h1>
             <p className="text-ink-muted text-sm mt-1">
-              Placed on your Swiggy account, scored after the fact.
+              Orders you placed in Swiggy, each with an estimate of its glucose impact.
             </p>
           </div>
 
-          {error && <p className="text-sm text-ember-text mb-4">{error}</p>}
+          {error && (
+            // An expired access token can't be refreshed while rendering here;
+            // try once through a route handler before asking to reconnect.
+            <RecoverIfExpired expired={error.action === "reconnect"}>
+            <div className="card-solid p-5 mb-4" role="alert">
+              <p className="font-medium mb-1">Orders didn&apos;t load</p>
+              <p className="text-sm text-ink-soft leading-relaxed">{error.message}</p>
+              <div className="mt-4">
+                {error.action === "address" && (
+                  <Link href="/settings" className="btn-primary text-sm min-h-11">
+                    Pick an address in Settings
+                  </Link>
+                )}
+                {error.action === "reconnect" && (
+                  <a href="/api/auth/swiggy/login" className="btn-primary text-sm min-h-11">
+                    Reconnect Swiggy
+                  </a>
+                )}
+                {/* A full navigation to this page re-runs the server fetch. */}
+                {error.action === "retry" && (
+                  <a href="/orders" className="btn-primary text-sm min-h-11">
+                    Try again
+                  </a>
+                )}
+              </div>
+            </div>
+            </RecoverIfExpired>
+          )}
 
           {!error && orders.length === 0 && (
-            <div className="card-solid p-8 text-center">
+            <div className="card-solid p-6">
               <p className="font-medium mb-1">No orders yet</p>
-              <p className="text-sm text-ink-muted">Orders you place in Swiggy will show up here.</p>
+              <p className="text-sm text-ink-muted leading-relaxed">
+                Orders you place in the Swiggy app for this delivery address show up here.
+              </p>
+              <Link href="/chat" className="btn-primary text-sm min-h-11 mt-4">
+                Find something to eat
+              </Link>
             </div>
           )}
 
-          <div className="space-y-3">
-            {orders.map((o) => (
-              <div key={o.order_id} className="card-solid p-4">
-                <div className="flex items-start justify-between gap-3 mb-1">
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm break-words">{o.restaurant ?? "Swiggy order"}</p>
-                    {o.area && <p className="text-xs text-ink-muted">{o.area}</p>}
-                  </div>
-                  <div className="text-right shrink-0">
-                    {o.total != null && (
-                      <p className="text-sm tabular-nums">
-                        {typeof o.total === "number" ? formatINR(o.total) : o.total}
-                      </p>
-                    )}
-                    {o.is_active && (
-                      <p className="text-xs text-leaf-text">{o.delivery_status ?? "in progress"}</p>
-                    )}
-                  </div>
-                </div>
-
-                {o.items?.length > 0 && (
-                  <p className="text-xs text-ink-muted leading-relaxed mt-1.5">{o.items.join(", ")}</p>
-                )}
-
-                {o.glucose && (
-                  <div className="flex items-center gap-4 mt-3 pt-3 border-t border-ink/8 text-xs">
-                    <span className="text-ink-soft">
-                      ~{o.glucose.estimated_carbs_g}g carbs
-                    </span>
-                    <span className="text-ink-soft">
-                      peak ~{o.glucose.highest_item_peak_mg_dl} mg/dL
-                    </span>
-                    {o.glucose.items_unscored > 0 && (
-                      <span className="text-ink-muted">
-                        {o.glucose.items_unscored} not scored
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
           {orders.length > 0 && (
-            <p className="text-xs text-ink-muted leading-relaxed mt-4">
-              Glucose figures are retrospective estimates from item names. Swiggy stores no
-              nutrition data. Useful for spotting patterns, not for precise numbers.
-            </p>
+            <>
+              <p className="text-xs text-ink-muted leading-relaxed mb-3">
+                Glucose figures are retrospective estimates from item names. Swiggy stores no
+                nutrition data, so use them to spot patterns, not as precise numbers.
+              </p>
+
+              <ul className="space-y-3">
+                {orders.map((o, idx) => {
+                  const when = formatOrderedAt(o.ordered_at);
+                  const status: string | null = o.is_active
+                    ? (o.delivery_status ?? "In progress")
+                    : (o.status ?? null);
+                  const items: string[] = Array.isArray(o.items) ? o.items : [];
+                  const meta = [when, o.area].filter(Boolean).join(", ");
+                  return (
+                    <li key={o.order_id ?? idx} className="card-solid p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm break-words">
+                            {o.restaurant ?? "Swiggy order"}
+                          </p>
+                          {meta && <p className="text-xs text-ink-muted mt-0.5">{meta}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          {o.total != null && (
+                            <p className="text-sm tabular-nums">
+                              {typeof o.total === "number" ? formatINR(o.total) : o.total}
+                            </p>
+                          )}
+                          {status && (
+                            <p
+                              className={
+                                o.is_active ? "text-xs font-medium text-leaf-text" : "text-xs text-ink-muted"
+                              }
+                            >
+                              {status}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {items.length > 0 && (
+                        <p className="text-sm text-ink-soft leading-relaxed mt-2">{items.join(", ")}</p>
+                      )}
+
+                      <div className="mt-3 pt-3 border-t border-ink/10 text-xs">
+                        {o.glucose ? (
+                          <dl className="flex flex-wrap gap-x-4 gap-y-1 text-ink-soft">
+                            <div>
+                              <dt className="sr-only">Estimated carbohydrate</dt>
+                              <dd className="tabular-nums">Est. {o.glucose.estimated_carbs_g}g carbs</dd>
+                            </div>
+                            <div>
+                              <dt className="sr-only">Estimated highest single-dish peak</dt>
+                              <dd className="tabular-nums">
+                                Est. peak {o.glucose.highest_item_peak_mg_dl} mg/dL
+                              </dd>
+                            </div>
+                            {o.glucose.items_unscored > 0 && (
+                              <div className="text-ink-muted">
+                                <dt className="sr-only">Coverage</dt>
+                                <dd>
+                                  {o.glucose.items_scored} of {items.length} items estimated
+                                </dd>
+                              </div>
+                            )}
+                          </dl>
+                        ) : (
+                          <p className="text-ink-muted">
+                            Not estimated. None of these items matched our food tables.
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           )}
         </div>
       </main>

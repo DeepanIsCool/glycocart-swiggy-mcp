@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { avoidMatches, dietConflict, preferenceRank, wantsVegOnly } from "./preferences";
 import { tool } from "ai";
 import type { Client } from "@modelcontextprotocol/client";
 import { predictGlucoseResponse } from "./glycemic";
@@ -40,7 +41,9 @@ export function unwrapSwiggy<T = any>(res: any): T {
 async function callSwiggy(client: Client, name: string, args: Record<string, unknown>) {
   const res = await client.callTool({ name, arguments: args });
 
-  if (res.structuredContent !== undefined) {
+  // An error can carry structuredContent too; returning it as-is made a failed
+  // call look like success to every caller that checks `success === false`.
+  if (res.structuredContent !== undefined && !res.isError) {
     return res.structuredContent as any;
   }
 
@@ -55,7 +58,8 @@ async function callSwiggy(client: Client, name: string, args: Record<string, unk
   }
 
   if (res.isError) {
-    const message = parsed?.error?.message ?? parsed?.raw ?? `${name} failed`;
+    const sc = res.structuredContent as any;
+    const message = sc?.error?.message ?? sc?.message ?? parsed?.error?.message ?? parsed?.raw ?? `${name} failed`;
     // A saved addressId can be deleted in the Swiggy app after we stored it.
     // Name that case so the agent re-fetches instead of retrying forever.
     const staleAddress =
@@ -113,14 +117,20 @@ function shapeRestaurant(r: any) {
  * Swiggy already returns. These used to be dropped on the floor, which is why
  * the UI had no images, no restaurant attribution and no stock state.
  */
+function idString(v: unknown): string | undefined {
+  return v === null || v === undefined || v === "" ? undefined : String(v);
+}
+
 function scoreRealItem(item: RawMenuItem, profile: UserProfile) {
   const base = {
-    id: item.id,
+    // Ids go to /api/cart as strings. Swiggy sends some as numbers, and a
+    // number failed the cart route's validation as "Invalid cart request".
+    id: idString(item.id),
     name: item.name,
     price: item.price,
     is_veg: item.isVeg,
     image_url: swiggyImageUrl(item.imageUrl),
-    restaurant_id: item.restaurantId,
+    restaurant_id: idString(item.restaurantId),
     restaurant_name: item.restaurantName,
     rating: item.rating,
     total_ratings: item.totalRatings,
@@ -128,7 +138,10 @@ function scoreRealItem(item: RawMenuItem, profile: UserProfile) {
     // Swiggy sends 0/1 as often as a boolean; absent means "assume available".
     in_stock: item.inStock === undefined ? true : Boolean(item.inStock),
     // Variant/addon items have a "from" price that changes at cart time.
-    has_options: Boolean(item.hasVariants || item.hasAddons)
+    has_options: Boolean(item.hasVariants || item.hasAddons),
+    // The person's own onboarding answers, applied to this dish by name.
+    avoid_matches: avoidMatches(item.name, profile.blocklist),
+    diet_conflict: dietConflict(item.isVeg, profile.dietary)
   };
 
   const est = estimateNutrition(item.name, item.description);
@@ -186,7 +199,9 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
         return {
           restaurants: (data?.restaurants ?? []).map(shapeRestaurant),
           total: data?.totalRestaurants ?? data?.total,
-          has_more: data?.hasMore,
+          // Some Swiggy payloads nest paging under `pagination` (get_addresses
+          // does); without this fallback "Load more" never appeared.
+          has_more: data?.hasMore ?? data?.pagination?.hasMore,
           next_offset: data?.nextOffset,
           render_note:
             "The UI already renders a card per restaurant with name, cuisines, rating, price and delivery time. Do NOT list them again in prose — say which one you'd pick for this user and why."
@@ -234,7 +249,9 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
           categories,
           total_categories: data?.totalCategories,
           page: data?.page,
-          has_more: data?.hasMore,
+          // Some Swiggy payloads nest paging under `pagination` (get_addresses
+          // does); without this fallback "Load more" never appeared.
+          has_more: data?.hasMore ?? data?.pagination?.hasMore,
           scoring_note:
             "Glucose forecasts are ESTIMATES from dish-name matching against Indian food composition tables — Swiggy does not publish per-dish nutrition. Tell the user this, and treat 'archetype' confidence as a rough category average."
         };
@@ -251,7 +268,10 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
         offset: z.coerce.number().optional()
       }),
       execute: async ({ addressId, query, vegFilter, offset }) => {
-        const res = await callSwiggy(client, "search_menu", { addressId, query, vegFilter, offset });
+        // A vegetarian, vegan or Jain profile asks Swiggy for veg dishes only,
+        // unless the agent explicitly asked otherwise.
+        const veg = vegFilter ?? (wantsVegOnly(profile.dietary) ? 1 : undefined);
+        const res = await callSwiggy(client, "search_menu", { addressId, query, vegFilter: veg, offset });
         if (res?.success === false) return res;
 
         const data = unwrapSwiggy<any>(res);
@@ -275,23 +295,24 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
           )
         );
 
-        // Best glycemic fit first; unscoreable items sink to the bottom.
-        scored.sort(
-          (a: any, b: any) => (b.glycemic?.match_score ?? -1) - (a.glycemic?.match_score ?? -1)
-        );
+        // Best glycemic fit first; dishes on their avoid list after the rest;
+        // unscoreable items sink to the bottom.
+        scored.sort((a: any, b: any) => preferenceRank(b) - preferenceRank(a));
 
         const rated = scored.filter((i: any) => i.glycemic);
         const allPoor =
           rated.length > 0 && rated.every((i: any) => i.glycemic.verdict === "poor");
-        const vegOnly = profile.dietary.some((d) => /vegetarian|vegan|jain/i.test(d));
-        const dietConflicts = vegOnly
-          ? scored.filter((i: any) => i.is_veg === false).map((i: any) => i.name)
-          : [];
+        // Dishes their diet rules out are not shown at all; the model is told
+        // how many were left out so it doesn't claim the search came up empty.
+        const dietConflicts = scored.filter((i: any) => i.diet_conflict).map((i: any) => i.name);
+        const shown = scored.filter((i: any) => !i.diet_conflict);
 
         return {
-          items: scored,
+          items: shown,
           total: data?.totalItems,
-          has_more: data?.hasMore,
+          // Some Swiggy payloads nest paging under `pagination` (get_addresses
+          // does); without this fallback "Load more" never appeared.
+          has_more: data?.hasMore ?? data?.pagination?.hasMore,
           ...(allPoor
             ? {
                 all_poor_fit:
@@ -300,8 +321,8 @@ export function buildSwiggyTools(client: Client, profile: UserProfile) {
             : {}),
           ...(dietConflicts.length
             ? {
-                diet_conflicts: dietConflicts,
-                diet_note: `The user's stated diet (${profile.dietary.join(", ")}) rules these out. Do not recommend them.`
+                diet_excluded: dietConflicts.length,
+                diet_note: `${dietConflicts.length} non-veg result(s) were left out because the user's stated diet (${profile.dietary.join(", ")}) rules them out.`
               }
             : {}),
           scoring_note:

@@ -13,7 +13,9 @@
  * to the provider they chose, and it must not be written to our database.
  */
 
-export type Provider = "nvidia" | "openrouter";
+import { KEY_PREFIX, type Provider } from "./ai-provider";
+
+export { KEY_PREFIX, type Provider };
 
 export interface AiSettings {
   provider: Provider;
@@ -27,11 +29,6 @@ export const DEFAULTS: AiSettings = { provider: "nvidia", model: "", apiKey: "" 
 
 /** Label for the model that runs when the user has not chosen one. */
 export const DEFAULT_MODEL_LABEL = "nemotron-3-ultra-550b";
-
-export const KEY_PREFIX: Record<Provider, string> = {
-  nvidia: "nvapi-",
-  openrouter: "sk-or-v1-"
-};
 
 export function loadAiSettings(): AiSettings {
   if (typeof window === "undefined") return DEFAULTS;
@@ -61,7 +58,12 @@ export function saveAiSettings(s: AiSettings): void {
 
 export const CHANGED = "glycocart:ai-settings";
 
-/** True when the key is empty (fine — the server key is used) or well-formed. */
+/**
+ * True when the key is well-formed, or empty on NVIDIA (the free server key is
+ * used). OpenRouter has no server key, so an empty key there is not valid.
+ */
 export function keyLooksValid(provider: Provider, apiKey: string): boolean {
-  return !apiKey.trim() || apiKey.startsWith(KEY_PREFIX[provider]);
+  const key = apiKey.trim();
+  if (!key) return provider === "nvidia";
+  return key.startsWith(KEY_PREFIX[provider]);
 }

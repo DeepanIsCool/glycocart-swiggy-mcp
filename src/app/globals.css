@@ -112,8 +112,9 @@
   .display { @apply font-display tracking-tight; }
   /* Fixed-height page that must not slide under the bottom tab bar. */
   .app-main { height: calc(100dvh - var(--nav-h)); }
-  /* Scrolling page: reserve room so the last element clears the tab bar. */
-  .app-scroll { min-height: calc(100dvh - var(--nav-h)); padding-bottom: 1.5rem; }
+  /* The tab bar is fixed, so the page must reserve its height or the last
+     card on every screen sits underneath it. */
+  .app-scroll { min-height: calc(100dvh - var(--nav-h)); padding-bottom: calc(var(--nav-h) + 1.5rem); }
   /* 13px floor with looser-but-not-extreme tracking. The previous 0.14em on
      uppercase micro-text measurably hurt legibility.
      Reserved for genuinely technical strings: tool names, argument dumps,
@@ -161,10 +162,30 @@
   }
   .app-bar-action {
     @apply inline-flex items-center justify-center size-11 rounded-full text-ink-muted
-    hover:text-ink hover:bg-cream-deep/60 active:scale-95 transition-all;
+    hover:text-ink hover:bg-cream-deep/60 active:scale-95 transition-all
+    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf;
   }
   .btn-ghost {
     @apply inline-flex items-center gap-2 text-ink-muted hover:text-ink px-3 py-2 rounded-full
     transition-colors text-sm;
   }
+
+  /*
+   * Shared interaction utilities. These were copied as string constants into
+   * seven components; one definition keeps focus and loading states identical
+   * across the app.
+   */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf
+    focus-visible:ring-offset-2 focus-visible:ring-offset-cream;
+  }
+  /* For controls inside a card that clips its overflow. */
+  .focus-ring-inset {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-leaf;
+  }
+  /* Placeholder block while content loads; still under reduced motion. */
+  .skeleton { @apply bg-cream-deep motion-safe:animate-pulse; }
+  /* Horizontal chip rows scroll by touch without a visible scrollbar. */
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
 }

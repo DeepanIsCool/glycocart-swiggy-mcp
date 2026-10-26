@@ -19,7 +19,7 @@ export const CONDITIONS: { id: ConditionId; label: string; blurb: string }[] = [
   { id: "pcos", label: "PCOS", blurb: "Diagnosed PCOS, no insulin resistance diagnosis" },
   { id: "prediabetes", label: "Prediabetes", blurb: "HbA1c between 5.7 and 6.4, or told you're prediabetic" },
   { id: "t2d", label: "Type 2 diabetes", blurb: "Diagnosed type 2 diabetes" },
-  { id: "general", label: "General metabolic health", blurb: "No diagnosis — you just want steadier energy" }
+  { id: "general", label: "General metabolic health", blurb: "No diagnosis. You just want steadier energy" }
 ];
 
 export interface CalibrationAnswers {
@@ -100,22 +100,26 @@ export function deriveMetabolicProfile(a: CalibrationAnswers): MetabolicProfile 
   const derivation: string[] = [];
 
   // --- Fasting baseline -----------------------------------------------------
-  let fastingBaseline: number;
+  // Clamped BEFORE it is described: the explanation used to quote the raw
+  // input ("260 mg/dL, the value you entered") next to a stat showing 200.
+  let raw: number;
+  let source: string;
   if (typeof a.fastingGlucose === "number" && a.fastingGlucose > 0) {
-    fastingBaseline = a.fastingGlucose;
-    derivation.push(`Fasting baseline ${Math.round(fastingBaseline)} mg/dL — the value you entered.`);
+    raw = a.fastingGlucose;
+    source = "the value you entered";
   } else if (typeof a.hba1c === "number" && a.hba1c > 0) {
-    fastingBaseline = eagFromHba1c(a.hba1c);
-    derivation.push(
-      `Fasting baseline ${Math.round(fastingBaseline)} mg/dL — estimated from your HbA1c of ${a.hba1c}% using the ADA average-glucose formula.`
-    );
+    raw = eagFromHba1c(a.hba1c);
+    source = `estimated from your HbA1c of ${a.hba1c}% using the ADA average-glucose formula`;
   } else {
-    fastingBaseline = prior.fasting;
-    derivation.push(
-      `Fasting baseline ${fastingBaseline} mg/dL — a typical starting value for your condition, not a measurement. Add a lab value to sharpen this.`
-    );
+    raw = prior.fasting;
+    source = "a typical starting value for your condition, not a measurement. Add a lab value to sharpen this";
   }
-  fastingBaseline = clamp(fastingBaseline, 70, 200);
+  const fastingBaseline = clamp(raw, 70, 200);
+  const capped =
+    Math.round(raw) !== Math.round(fastingBaseline)
+      ? ` Your figure of ${Math.round(raw)} mg/dL is outside the 70 to 200 range this model works in, so it uses ${Math.round(fastingBaseline)}.`
+      : "";
+  derivation.push(`Fasting baseline ${Math.round(fastingBaseline)} mg/dL: ${source}.${capped}`);
 
   // --- Insulin sensitivity --------------------------------------------------
   let sensitivity = prior.sensitivity;
@@ -152,14 +156,14 @@ export function deriveMetabolicProfile(a: CalibrationAnswers): MetabolicProfile 
 
   sensitivity = clamp(Number(sensitivity.toFixed(3)), 0.35, 1.1);
   derivation.push(
-    `Carb sensitivity ${sensitivity} — a population starting point based on ${reasons.join(", ")}. Higher means carbs raise your glucose faster.`
+    `Carb sensitivity ${sensitivity}: a population starting point based on ${reasons.join(", ")}. Higher means carbs raise your glucose faster.`
   );
 
   // --- Baseline AUC ---------------------------------------------------------
   // Calibrated so this reproduces the previously hand-tuned reference profiles.
   const baselineAUC = Math.round(fastingBaseline * sensitivity * 143);
   derivation.push(
-    `Typical 3-hour glucose load ${baselineAUC} — computed from your baseline and carb sensitivity; used to score how well a dish fits you.`
+    `Typical 3-hour glucose load ${baselineAUC}: computed from your baseline and carb sensitivity; used to score how well a dish fits you.`
   );
 
   derivation.push("These are estimates, not clinical measurements. Connect a CGM later to replace them with your real data.");
@@ -176,16 +180,24 @@ export function deriveMetabolicProfile(a: CalibrationAnswers): MetabolicProfile 
 
 /** Mifflin-St Jeor BMR × activity, nudged by the stated goal. */
 export function deriveCalorieTarget(a: CalibrationAnswers): number {
+  return calorieTargetDetail(a).target;
+}
+
+/** The target plus whether the 1200 to 4000 kcal limits changed it, so it can be explained truthfully. */
+export function calorieTargetDetail(a: CalibrationAnswers): { target: number; limit: "floor" | "ceiling" | null } {
   const { age, sex, heightCm, weightKg, activity, goal } = a;
   if (!age || !heightCm || !weightKg) {
     // No body metrics given — a sane, editable default rather than a fake number.
-    return goal === "lose" ? 1700 : goal === "gain" ? 2400 : 2000;
+    return { target: goal === "lose" ? 1700 : goal === "gain" ? 2400 : 2000, limit: null };
   }
   const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
   const bmr = sex === "male" ? base + 5 : sex === "female" ? base - 161 : base - 78;
   const tdee = bmr * (ACTIVITY_FACTOR[activity] ?? 1.375);
   const adjusted = goal === "lose" ? tdee * 0.85 : goal === "gain" ? tdee * 1.1 : tdee;
-  return Math.round(clamp(adjusted, 1200, 4000) / 50) * 50;
+  return {
+    target: Math.round(clamp(adjusted, 1200, 4000) / 50) * 50,
+    limit: adjusted < 1200 ? "floor" : adjusted > 4000 ? "ceiling" : null
+  };
 }
 
 export function buildUserProfile(id: string, a: CalibrationAnswers): UserProfile {
