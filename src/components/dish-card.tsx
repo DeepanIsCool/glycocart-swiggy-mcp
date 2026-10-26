@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { ChevronDown, HelpCircle, Plus, Star, UtensilsCrossed, Flame } from "lucide-react";
+import { ArrowRight, ChevronDown, HelpCircle, Plus, Star, UtensilsCrossed, Flame } from "lucide-react";
 import { GlucoseChart } from "./glucose-chart";
 import { formatINR, cn } from "@/lib/utils";
 
@@ -43,6 +42,10 @@ const VERDICT = {
   poor: { dot: "bg-ember", text: "text-ember-text", label: "Avoid" }
 } as const;
 
+/** Keyboard focus is otherwise invisible: the base styles reset outlines. */
+const FOCUS =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 focus-visible:ring-offset-cream";
+
 export function DishCard({
   item,
   rank,
@@ -57,6 +60,7 @@ export function DishCard({
 }) {
   const [open, setOpen] = useState(false);
   const [imgFailed, setImgFailed] = useState(false);
+  const panelId = useId();
   const g = item.glycemic;
   const v = g ? VERDICT[g.verdict] : null;
   const outOfStock = item.in_stock === false;
@@ -65,16 +69,28 @@ export function DishCard({
   const canAdd = Boolean(onAddToCart && item.restaurant_id && !outOfStock);
 
   return (
-    <div className={cn("card-solid overflow-hidden", outOfStock && "opacity-60")}>
+    // Out of stock used to fade the whole card to 60%, which took the muted
+    // text under AA. Only the photo dims now; the words say "out of stock".
+    <div className="card-solid overflow-hidden">
       <div className="flex items-stretch">
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex-1 min-w-0 text-left p-3 flex items-start gap-3 hover:bg-cream-deep/40 transition-colors"
+        aria-controls={panelId}
+        className={cn(
+          // Inset ring: the card clips overflow, so an outset one lost its edges.
+          "flex-1 min-w-0 text-left p-3 flex items-start gap-3 rounded-2xl hover:bg-cream-deep/40 transition-colors",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-leaf"
+        )}
       >
         {/* Thumbnail, with a tinted placeholder when Swiggy gives us nothing usable */}
-        <span className="relative shrink-0 size-14 rounded-xl overflow-hidden bg-cream-deep flex items-center justify-center">
+        <span
+          className={cn(
+            "relative shrink-0 size-14 rounded-xl overflow-hidden bg-cream-deep flex items-center justify-center",
+            outOfStock && "opacity-50 grayscale"
+          )}
+        >
           {showImage ? (
             <Image
               src={item.image_url!}
@@ -112,37 +128,44 @@ export function DishCard({
 
           {/* The verdict sits under the name rather than in its own column. As
               a third column it squeezed the name to ~108px on a 375px screen
-              and every dish title wrapped to four lines. */}
-          <span className="flex items-center gap-1.5 mt-1">
+              and every dish title wrapped to four lines.
+              The peak used to be a bare "142": no unit, and nothing saying it
+              was an estimate. Every glucose figure carries both. */}
+          <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 mt-1">
             {g ? (
               <>
-                <span className={cn("size-2 rounded-full shrink-0", v!.dot)} />
-                <span className="text-sm font-medium tabular-nums">{g.predicted_peak_mg_dl}</span>
-                <span className={cn("text-xs", v!.text)}>{v!.label}</span>
+                <span className={cn("size-2 rounded-full shrink-0 self-center", v!.dot)} aria-hidden />
+                <span className="text-xs text-ink-muted">est. peak</span>
+                <span className="text-sm font-medium tabular-nums text-ink">
+                  {g.predicted_peak_mg_dl}
+                  <span className="text-xs font-normal text-ink-muted"> mg/dL</span>
+                </span>
+                <span className={cn("text-xs font-medium", v!.text)}>{v!.label}</span>
               </>
             ) : (
               <span className="inline-flex items-center gap-1 text-xs text-ink-muted">
-                <HelpCircle size={13} /> not scored
+                <HelpCircle size={13} aria-hidden /> Not scored
               </span>
             )}
           </span>
 
+          {/* Price is what people scan for, so it reads in ink, not muted. */}
           <span className="block text-xs text-ink-muted mt-1">
             {typeof item.price === "number" && item.price > 0 ? (
-              <>
-                {item.has_options && "from "}
+              <span className="text-sm font-medium text-ink tabular-nums">
+                {item.has_options && <span className="text-xs font-normal text-ink-muted">from </span>}
                 {formatINR(item.price)}
-              </>
+              </span>
             ) : (
-              "price unavailable"
+              "Price unavailable"
             )}
             {g && (
               <>
                 {" · "}
-                {g.calories} kcal · {g.carbs_g}g carbs
+                <span className="tabular-nums">{g.calories} kcal · {g.carbs_g}g carbs</span>
               </>
             )}
-            {outOfStock && <span className="text-ember-text"> · out of stock</span>}
+            {outOfStock && <span className="text-ember-text font-medium"> · Out of stock</span>}
           </span>
 
           {showMenuLink && item.restaurant_name && (
@@ -150,7 +173,7 @@ export function DishCard({
               <span className="truncate max-w-[70%]">{item.restaurant_name}</span>
               {item.rating && (
                 <span className="inline-flex items-center gap-0.5 shrink-0">
-                  <Star size={10} className="fill-leaf-text text-leaf-text" />
+                  <Star size={10} className="fill-leaf-text text-leaf-text" aria-hidden />
                   {item.rating}
                 </span>
               )}
@@ -159,14 +182,18 @@ export function DishCard({
 
           {item.is_bestseller && (
             <span className="inline-flex items-center gap-1 mt-1.5 text-xs text-swiggy-text">
-              <Flame size={11} /> bestseller here
+              <Flame size={11} aria-hidden /> Bestseller here
             </span>
           )}
         </span>
 
         <ChevronDown
           size={15}
-          className={cn("text-ink-muted shrink-0 self-center transition-transform", open && "rotate-180")}
+          aria-hidden
+          className={cn(
+            "text-ink-muted shrink-0 self-center transition-transform motion-reduce:transition-none",
+            open && "rotate-180"
+          )}
         />
       </button>
 
@@ -177,15 +204,20 @@ export function DishCard({
           type="button"
           onClick={() => onAddToCart!(item)}
           aria-label={`Add ${item.name} to cart`}
-          className="shrink-0 self-center mr-3 ml-1 size-9 rounded-full bg-swiggy/15 border border-swiggy/40 text-swiggy-text flex items-center justify-center hover:bg-swiggy/25 transition-colors"
+          // 44x44: the old 36px target sat right next to the expand row and
+          // was easy to miss on a phone.
+          className={cn(
+            "shrink-0 self-center mr-2 size-11 rounded-full bg-swiggy/15 border border-swiggy/40 text-swiggy-text flex items-center justify-center hover:bg-swiggy/25 active:scale-95 transition-all motion-reduce:transition-none",
+            FOCUS
+          )}
         >
-          <Plus size={17} strokeWidth={2.5} />
+          <Plus size={18} strokeWidth={2.5} aria-hidden />
         </button>
       )}
       </div>
 
       {open && (
-        <div className="px-3 pb-3 border-t border-ink/8">
+        <div id={panelId} className="px-3 pb-3 border-t border-ink/8">
           {g ? (
             <>
               <div className="grid grid-cols-4 gap-2 my-3 text-center">
@@ -208,10 +240,11 @@ export function DishCard({
               </div>
 
               <p className="text-xs text-ink-soft leading-relaxed">
+                {/* The old markup rendered "basis , a category average": a JSX
+                    space before the comma. */}
                 {g.estimate_basis}
                 {g.estimate_confidence === "archetype" && (
                   <span className="text-ink-muted">
-                    {" "}
                     , a category average, so it may differ from this kitchen&apos;s recipe.
                   </span>
                 )}
@@ -228,17 +261,17 @@ export function DishCard({
             <button
               type="button"
               onClick={() => onAddToCart!(item)}
-              className="btn-swiggy w-full mt-3 py-2.5 text-sm"
+              className={cn("btn-swiggy w-full mt-3 py-3 text-sm", FOCUS)}
             >
-              <Plus size={15} /> Add to cart
+              <Plus size={15} aria-hidden /> Add to cart
             </button>
           )}
           {item.restaurant_id && showMenuLink && (
             <Link
               href={`/restaurant/${item.restaurant_id}`}
-              className="btn-ghost mt-2 -ml-3 text-sm"
+              className={cn("btn-ghost mt-2 -ml-3 min-h-11 text-sm", FOCUS)}
             >
-              see the full menu, scored <ArrowRight size={13} />
+              See the full menu, scored <ArrowRight size={13} aria-hidden />
             </Link>
           )}
 
@@ -259,6 +292,25 @@ function Stat({ label, value }: { label: string; value: string | number }) {
     <div className="bg-cream py-2 rounded-lg">
       <div className="text-sm font-medium">{value}</div>
       <div className="mono text-ink-muted text-xs">{label}</div>
+    </div>
+  );
+}
+
+/**
+ * Placeholder in the exact footprint of a collapsed DishCard, shown while a
+ * menu search is running. The shape of the answer is known, so a spinner would
+ * waste the wait and the layout would jump when the cards land.
+ */
+export function DishCardSkeleton() {
+  return (
+    <div className="card-solid p-3 flex items-start gap-3" aria-hidden>
+      <span className="shrink-0 size-14 rounded-xl bg-cream-deep motion-safe:animate-pulse" />
+      <span className="flex-1 min-w-0 space-y-2 pt-0.5">
+        <span className="block h-3.5 w-3/5 rounded bg-cream-deep motion-safe:animate-pulse" />
+        <span className="block h-3 w-2/5 rounded bg-cream-deep motion-safe:animate-pulse" />
+        <span className="block h-3 w-1/2 rounded bg-cream-deep motion-safe:animate-pulse" />
+      </span>
+      <span className="shrink-0 self-center size-11 rounded-full bg-cream-deep motion-safe:animate-pulse" />
     </div>
   );
 }

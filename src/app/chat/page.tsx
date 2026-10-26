@@ -1,8 +1,22 @@
+import type { Viewport } from "next";
 import { redirect } from "next/navigation";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { ChatView } from "@/components/chat-view";
 import { BottomNav } from "@/components/bottom-nav";
+
+/**
+ * The on-screen keyboard used to slide over the composer on Android Chrome,
+ * whose default only shrinks the visual viewport, so `100dvh` never changed
+ * and the input sat behind the keys. `resizes-content` shrinks the layout
+ * viewport instead, and the fixed-height chat column shrinks with it. Next
+ * merges this key into the root layout's viewport, so the theme colours and
+ * `viewport-fit=cover` there still apply. iOS Safari ignores the key and pans
+ * the page to the focused field, which already keeps the composer visible.
+ */
+export const viewport: Viewport = {
+  interactiveWidget: "resizes-content"
+};
 
 export default async function ChatPage() {
   const uid = await getSessionUid();
