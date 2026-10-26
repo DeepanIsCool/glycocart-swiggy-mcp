@@ -494,7 +494,7 @@ function AiSection() {
       footer={
         <>
           GlycoCart runs on {DEFAULT_MODEL_LABEL} through NVIDIA by default, at no cost to you.
-          A key you add stays in this browser and is only sent to the provider you pick.
+          A key you add is saved in this browser. GlycoCart&apos;s server passes it to the provider you pick with each message and never stores it.
         </>
       }
     >

@@ -60,6 +60,6 @@ Ten suites, each written against a bug that shipped. Among them: the forbidden-t
 
 ## Privacy
 
-- API keys you enter stay in your browser and go only to the provider you chose.
+- An API key you enter is saved in your browser. The server forwards it to the provider you chose with each request and never stores it.
 - Your profile is keyed by a pseudonymous id derived from your Swiggy account, not your name or phone number.
 - The LLM sees your questionnaire-derived profile and Swiggy results. There is no CGM integration today.
