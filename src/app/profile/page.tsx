@@ -5,7 +5,7 @@ import { MapPin, Pencil, Settings as SettingsIcon } from "lucide-react";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { BottomNav } from "@/components/bottom-nav";
-import { CONDITIONS, type CalibrationAnswers, type UserProfile } from "@/lib/profile";
+import { CONDITIONS, calorieTargetDetail, type CalibrationAnswers, type UserProfile } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +41,14 @@ function calorieExplanation(p: UserProfile): string {
         : "your age, height, weight and activity level, halfway between the male and female formulas since sex wasn't given";
     const adjust =
       p.goal === "lose" ? ", then 15% lower for weight loss" : p.goal === "gain" ? ", then 10% higher to gain" : "";
-    return `Daily target ${p.dailyCalTarget} kcal from the Mifflin-St Jeor equation, using ${inputs}${adjust}. Rounded to the nearest 50.`;
+    const { limit } = calorieTargetDetail(p.answers);
+    const held =
+      limit === "floor"
+        ? " The formula came out below 1200 kcal, so it is held at 1200, the lowest this app will suggest."
+        : limit === "ceiling"
+          ? " The formula came out above 4000 kcal, so it is held at 4000."
+          : " Rounded to the nearest 50.";
+    return `Daily target ${p.dailyCalTarget} kcal from the Mifflin-St Jeor equation, using ${inputs}${adjust}.${held}`;
   }
   return `Daily target ${p.dailyCalTarget} kcal is the default for your goal, because age, height and weight weren't all given. Add them to calculate one for you.`;
 }

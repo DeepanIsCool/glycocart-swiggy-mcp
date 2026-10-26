@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   defaultAddressId: z.string().trim().min(1).max(120),
-  defaultAddressLabel: z.string().trim().max(200).optional()
+  defaultAddressLabel: z.string().trim().transform((v) => v.slice(0, 200)).optional()
 });
 
 /** Change the default delivery address without re-running onboarding. */

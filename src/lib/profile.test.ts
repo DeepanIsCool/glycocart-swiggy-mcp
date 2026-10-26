@@ -12,6 +12,7 @@ import {
   deriveMetabolicProfile,
   deriveCalorieTarget,
   buildUserProfile,
+  calorieTargetDetail,
   type CalibrationAnswers
 } from "./profile";
 
@@ -95,5 +96,24 @@ assert.equal(profile.displayName, "Priya", "display name is trimmed");
 assert.equal(profile.id, "uid-1");
 assert.deepEqual(profile.metabolic.triggers, ["white rice"], "empty trigger entries are dropped");
 assert.equal(profile.conditionLabel, "PCOS with insulin resistance");
+
+// The explanation must describe the number actually used. A fasting value of
+// 260 was clamped to 200 while the derivation still said "260 ... the value
+// you entered", side by side on the Profile screen.
+{
+  const m = deriveMetabolicProfile({ ...base, fastingGlucose: 260 });
+  assert.equal(m.fastingBaseline, 200);
+  const line = m.derivation.find((d) => d.startsWith("Fasting baseline"))!;
+  assert.ok(line.startsWith("Fasting baseline 200 mg/dL"), `derivation must quote the clamped value: ${line}`);
+  assert.ok(line.includes("260"), "and say what the entered value was");
+}
+
+// The calorie floor is reported, not hidden behind "rounded to the nearest 50".
+{
+  const d = calorieTargetDetail({ ...base, age: 80, heightCm: 140, weightKg: 35, sex: "female", goal: "lose" });
+  assert.equal(d.target, 1200);
+  assert.equal(d.limit, "floor");
+  assert.equal(calorieTargetDetail({ ...base, age: 30, heightCm: 170, weightKg: 65, sex: "male" }).limit, null);
+}
 
 console.log("profile: all checks passed");

@@ -1,5 +1,6 @@
 "use client";
 
+import { clearOnboardingDraft } from "@/lib/onboarding-draft";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, ChevronDown, Search, Eye, EyeOff, ExternalLink } from "lucide-react";
@@ -188,6 +189,7 @@ export function SettingsView({
     try {
       const res = await fetch("/api/session", { method: "POST" });
       if (!res.ok) throw new Error();
+      clearOnboardingDraft();
       router.push("/");
       router.refresh();
     } catch {
@@ -205,6 +207,7 @@ export function SettingsView({
       // The API key lives in this browser, not our database, so deleting the
       // server-side profile alone would leave it behind.
       saveAiSettings(DEFAULTS);
+      clearOnboardingDraft();
       router.push("/");
       router.refresh();
     } catch (err) {

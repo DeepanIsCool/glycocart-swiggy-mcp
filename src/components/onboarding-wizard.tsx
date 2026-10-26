@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type Ref } from "react";
+import { ONBOARDING_DRAFT_KEY } from "@/lib/onboarding-draft";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Loader2, MapPin, Plus, RefreshCw, X } from "lucide-react";
 import { CONDITIONS, type CalibrationAnswers } from "@/lib/profile";
@@ -107,7 +108,7 @@ interface SwiggyContext {
  * answers, cleared as soon as the profile saves, and ignored after 30 minutes
  * so an abandoned edit doesn't reappear the next time Profile is edited.
  */
-const DRAFT_KEY = "glycocart:onboarding-draft:v1";
+const DRAFT_KEY = ONBOARDING_DRAFT_KEY;
 const DRAFT_TTL_MS = 30 * 60 * 1000;
 const EMPTY_PENDING: Record<ListKey, string> = { triggers: "", safeFoods: "" };
 interface Draft {
@@ -822,6 +823,8 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
           )}
 
           <FreeList
+            id={fieldId("triggers")}
+            error={errors.triggers}
             label="Foods you know spike you"
             hint="For example white rice, chole bhature"
             values={a.triggers}
@@ -830,6 +833,8 @@ export function OnboardingWizard({ initial }: { initial?: Partial<CalibrationAns
             onChange={(v) => set("triggers", v)}
           />
           <FreeList
+            id={fieldId("safeFoods")}
+            error={errors.safeFoods}
             label="Foods that always sit well"
             hint="For example dal, ragi roti"
             values={a.safeFoods}
@@ -1072,6 +1077,8 @@ function ChipGroup({
 }
 
 function FreeList({
+  id,
+  error,
   label,
   hint,
   values,
@@ -1079,6 +1086,9 @@ function FreeList({
   onDraft,
   onChange
 }: {
+  /** Fixed id so a rejected save can move focus here. */
+  id: string;
+  error?: string;
   label: string;
   hint: string;
   values: string[];
@@ -1086,8 +1096,9 @@ function FreeList({
   onDraft: (v: string) => void;
   onChange: (v: string[]) => void;
 }) {
-  const inputId = useId();
+  const inputId = id;
   const hintId = `${inputId}-hint`;
+  const errorId = `${inputId}-error`;
 
   const add = () => {
     const v = draft.trim();
@@ -1112,10 +1123,11 @@ function FreeList({
               add();
             }
           }}
-          maxLength={40}
+          maxLength={60}
           enterKeyHint="done"
-          aria-describedby={hintId}
-          className={cn(inputClass(false), "flex-1 w-auto min-w-0")}
+          aria-describedby={error ? `${hintId} ${errorId}` : hintId}
+          aria-invalid={error ? true : undefined}
+          className={cn(inputClass(!!error), "flex-1 w-auto min-w-0")}
         />
         <button
           type="button"
@@ -1129,6 +1141,7 @@ function FreeList({
       <p id={hintId} className="text-sm text-ink-muted mt-1">
         {hint}
       </p>
+      <FieldError id={errorId} message={error} />
       {values.length > 0 && (
         <ul className="flex flex-wrap gap-2 mt-2" aria-label={label}>
           {values.map((v) => (
