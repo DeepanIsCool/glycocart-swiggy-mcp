@@ -1,15 +1,18 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowLeft, Star, Clock, MapPin } from "lucide-react";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
 import { buildSwiggyTools } from "@/lib/swiggy-tools";
 import { BottomNav } from "@/components/bottom-nav";
 import { RestaurantMenu } from "@/components/restaurant-menu";
+import { RestaurantHeader } from "@/components/restaurant-card";
+import { BackButton } from "./back-button";
 
 export const dynamic = "force-dynamic";
+
+/** What the person can do about a failed load: fix a setting, or retry. */
+type LoadError = { message: string; fix: "settings" | "retry" };
 
 export default async function RestaurantPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,14 +22,17 @@ export default async function RestaurantPage({ params }: { params: Promise<{ id:
   if (!profile) redirect("/onboarding");
 
   let menu: any = null;
-  let error: string | null = null;
+  let error: LoadError | null = null;
 
   if (!profile.defaultAddressId) {
-    error = "Pick a delivery address in Settings. A menu depends on where it's delivering.";
+    error = {
+      message: "Pick a delivery address in Settings. A menu depends on where it's delivering.",
+      fix: "settings"
+    };
   } else {
     const client = await getSwiggyClient();
     if (!client) {
-      error = "Your Swiggy session expired. Reconnect from Settings.";
+      error = { message: "Your Swiggy session expired. Reconnect from Settings.", fix: "settings" };
     } else {
       try {
         menu = await buildSwiggyTools(client, profile).get_restaurant_menu.execute(
@@ -34,82 +40,88 @@ export default async function RestaurantPage({ params }: { params: Promise<{ id:
           { toolCallId: "page", messages: [] } as any
         );
         if (menu?.success === false) {
-          error = menu.error?.message ?? "Swiggy couldn't return this menu.";
+          error = { message: menu.error?.message ?? "Swiggy couldn't return this menu.", fix: "retry" };
           menu = null;
         }
       } catch {
-        error = "Couldn't load this menu from Swiggy.";
+        error = { message: "Couldn't load this menu from Swiggy.", fix: "retry" };
       }
     }
   }
 
   const r = menu?.restaurant;
+  const closed = r?.is_open === false;
+  const actionClass =
+    "inline-flex items-center justify-center min-h-11 rounded-full px-5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf focus-visible:ring-offset-2 focus-visible:ring-offset-cream";
 
   return (
     <>
-      <main className="app-scroll px-5 md:px-10 py-6">
-        <div className="max-w-2xl mx-auto">
-          <Link href="/chat" className="btn-ghost -ml-3 mb-4">
-            <ArrowLeft size={14} /> back to chat
-          </Link>
+      <main className="app-scroll">
+        <header className="app-bar">
+          <BackButton />
+          <span className="flex-1 min-w-0 truncate text-center text-sm font-medium">
+            {r?.name ?? "Menu"}
+          </span>
+          {/* Balances the back button so the title stays centred. */}
+          <span className="size-11 shrink-0" aria-hidden />
+        </header>
 
-          {error && <p className="text-sm text-ember-text">{error}</p>}
-
-          {r && (
-            <header className="flex items-start gap-4 mb-6">
-              {r.image_url && (
-                <span className="relative shrink-0 size-20 rounded-2xl overflow-hidden bg-cream-deep">
-                  <Image src={r.image_url} alt="" fill sizes="80px" className="object-cover" />
-                </span>
-              )}
-              <div className="min-w-0">
-                <h1 className="display text-3xl leading-tight break-words">{r.name}</h1>
-                {r.cuisines?.length > 0 && (
-                  <p className="text-sm text-ink-muted mt-1">{r.cuisines.join(", ")}</p>
-                )}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted mt-2">
-                  {r.rating && (
-                    <span className="inline-flex items-center gap-1">
-                      <Star size={11} className="fill-leaf-text text-leaf-text" />
-                      <span className="font-medium text-ink-soft">{r.rating}</span>
-                      {r.total_ratings && <span>{r.total_ratings}</span>}
-                    </span>
+        <div className="px-5 md:px-10 pt-6">
+          <div className="max-w-2xl mx-auto">
+            {error && (
+              <div className="card-solid p-5" role="alert">
+                <p className="font-medium mb-1">This menu didn&apos;t load</p>
+                <p className="text-sm text-ink-muted leading-relaxed">{error.message}</p>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {error.fix === "settings" ? (
+                    <Link href="/settings" className={`${actionClass} bg-ink text-cream hover:bg-ink-soft`}>
+                      Open Settings
+                    </Link>
+                  ) : (
+                    // A plain anchor, not <Link>: a full request re-runs the
+                    // server fetch, where a client navigation to the same URL
+                    // may reuse what just failed.
+                    <a href={`/restaurant/${encodeURIComponent(id)}`} className={`${actionClass} bg-ink text-cream hover:bg-ink-soft`}>
+                      Try again
+                    </a>
                   )}
-                  {r.delivery_time && (
-                    <span className="inline-flex items-center gap-1">
-                      <Clock size={11} /> {r.delivery_time}
-                    </span>
-                  )}
-                  {r.cost_for_two && <span>{r.cost_for_two}</span>}
-                  {r.area && (
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin size={11} /> {r.area}
-                    </span>
-                  )}
+                  <Link
+                    href="/chat"
+                    className={`${actionClass} border border-ink/10 text-ink-soft hover:text-ink hover:bg-cream-deep/60`}
+                  >
+                    Back to chat
+                  </Link>
                 </div>
-                {r.is_open === false && (
-                  <p className="text-xs text-ember-text mt-1.5">Closed right now.</p>
-                )}
               </div>
-            </header>
-          )}
+            )}
 
-          {menu && (
-            <RestaurantMenu
-              restaurantId={id}
-              initial={menu.categories ?? []}
-              hasMore={Boolean(menu.has_more)}
-              addressMissing={!profile.defaultAddressId}
-            />
-          )}
+            {r && <RestaurantHeader r={r} />}
 
-          {menu && (
-            <p className="text-xs text-ink-muted leading-relaxed mt-6">
-              Glucose figures are estimates from dish names matched against Indian food composition
-              tables. Swiggy publishes no per-dish nutrition, so items we can&apos;t recognise are
-              marked unscored rather than guessed.
-            </p>
-          )}
+            {closed && (
+              <p className="mt-4 rounded-xl border border-ember/30 bg-cream-warm px-4 py-3 text-sm text-ember-text leading-relaxed">
+                Closed on Swiggy right now. The menu and its estimates are here to read, but it
+                won&apos;t deliver until it reopens.
+              </p>
+            )}
+
+            {menu && (
+              <p className="text-xs text-ink-muted leading-relaxed mt-4 mb-5">
+                Glucose figures are estimates from dish names matched against Indian food
+                composition tables. Swiggy publishes no per-dish nutrition, so dishes we can&apos;t
+                recognise are marked unscored rather than guessed.
+              </p>
+            )}
+
+            {menu && (
+              <RestaurantMenu
+                restaurantId={id}
+                initial={menu.categories ?? []}
+                hasMore={Boolean(menu.has_more)}
+                totalCategories={typeof menu.total_categories === "number" ? menu.total_categories : undefined}
+                addressMissing={!profile.defaultAddressId}
+              />
+            )}
+          </div>
         </div>
       </main>
       <BottomNav />
