@@ -1,7 +1,7 @@
 import type { Client } from "@modelcontextprotocol/client";
 import type { UserProfile } from "./profile";
 import { buildSwiggyTools } from "./swiggy-tools";
-import { buildCartTools } from "./cart-tools";
+import { buildCartTools, type CartMemory } from "./cart-tools";
 import { buildInstamartTools } from "./instamart-tools";
 import { buildOrderTools } from "./orders-tools";
 import { buildDineoutTools } from "./dineout-tools";
@@ -16,11 +16,12 @@ export function buildToolset(
   profile: UserProfile,
   swiggyClient: Client,
   instamartClient?: Client | null,
-  dineoutClient?: Client | null
+  dineoutClient?: Client | null,
+  cartMemory?: CartMemory
 ) {
   return {
     ...buildSwiggyTools(swiggyClient, profile),
-    ...buildCartTools(swiggyClient, profile),
+    ...buildCartTools(swiggyClient, profile, cartMemory),
     ...buildOrderTools(swiggyClient, profile),
     // Groceries and dining out are optional surfaces: if either server is
     // unreachable the agent simply doesn't get those tools rather than the

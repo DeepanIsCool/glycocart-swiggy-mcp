@@ -124,16 +124,50 @@ function shapeCart(res: any, profile: UserProfile) {
   };
 }
 
-export function buildCartTools(client: Client, profile: UserProfile) {
+/**
+ * Where the cart's restaurant id is remembered. Optional so the tools stay
+ * testable without a database; the chat route and /api/cart both pass one, so
+ * a cart built by the agent can be edited from the Cart tab and vice versa.
+ */
+export interface CartMemory {
+  remember(restaurantId: string, restaurantName: string): Promise<void>;
+  recall(): Promise<{ id: string; name: string } | null>;
+}
+
+export function buildCartTools(client: Client, profile: UserProfile, memory?: CartMemory) {
+  /**
+   * A Swiggy cart belongs to one address. The agent used to pass whichever
+   * address it chose, so a cart built in chat could sit on a different address
+   * from the one the Cart tab reads, and look empty there. Every cart call uses
+   * the saved default when there is one.
+   */
+  const cartAddress = (asked: string | undefined) => profile.defaultAddressId ?? asked ?? "";
+
+  /** Attach the remembered restaurant id when the cart names the same restaurant. */
+  async function withRestaurantId(cart: any) {
+    if (!memory || !cart || cart.success === false || !cart.restaurant?.name || cart.restaurant.id) return cart;
+    try {
+      const saved = await memory.recall();
+      if (saved && saved.name.trim().toLowerCase() === String(cart.restaurant.name).trim().toLowerCase()) {
+        return { ...cart, restaurant: { ...cart.restaurant, id: saved.id } };
+      }
+    } catch (err) {
+      console.error("Could not read cart restaurant", err);
+    }
+    return cart;
+  }
+
+  const readCart = async (addressId: string) =>
+    withRestaurantId(shapeCart(await callSwiggyRaw(client, "get_food_cart", { addressId }), profile));
+
   return {
     get_food_cart: tool({
       description:
         "Get the user's current Swiggy cart with real pricing and the combined estimated glucose load. Call before suggesting changes so you know what's already in it.",
       parameters: z.object({
-        addressId: z.string().describe("required — delivery charges depend on it")
+        addressId: z.string().optional().describe("ignored when the user has a saved default address")
       }),
-      execute: async ({ addressId }) =>
-        shapeCart(await callSwiggyRaw(client, "get_food_cart", { addressId }), profile)
+      execute: async ({ addressId }) => readCart(cartAddress(addressId))
     }),
 
     update_food_cart: tool({
@@ -141,7 +175,7 @@ export function buildCartTools(client: Client, profile: UserProfile) {
         "Add or change items in the Swiggy cart. A Swiggy cart belongs to ONE restaurant: if the cart already holds items from a different restaurantId, do NOT call this — tell the user and ask whether to clear the cart first. Quantity 0 removes an item.",
       parameters: z.object({
         restaurantId: z.string().describe("the restaurant these items belong to"),
-        addressId: z.string().describe("from the user's profile or get_addresses"),
+        addressId: z.string().optional().describe("ignored when the user has a saved default address"),
         restaurantName: z.string().describe("required — the cart guard compares by name, not id"),
         cartItems: z
           .array(
@@ -156,7 +190,8 @@ export function buildCartTools(client: Client, profile: UserProfile) {
           .optional()
           .describe("set (default): quantity is the new total. add: quantity is added to what is already in the cart.")
       }),
-      execute: async ({ restaurantId, addressId, restaurantName, cartItems, mode }) => {
+      execute: async ({ restaurantId, addressId: asked, restaurantName, cartItems, mode }) => {
+        const addressId = cartAddress(asked);
         // Guard the single-restaurant rule server-side. Swiggy silently WIPES the
         // cart when you add from another restaurant — verified live — so this
         // must be caught before the call, not reported after.
@@ -195,7 +230,7 @@ export function buildCartTools(client: Client, profile: UserProfile) {
         // requires at least one item — emptying is a different call.
         if (merged.length === 0) {
           await callSwiggyRaw(client, "flush_food_cart", {});
-          return shapeCart(await callSwiggyRaw(client, "get_food_cart", { addressId }), profile);
+          return readCart(addressId);
         }
 
         const res = await callSwiggyRaw(client, "update_food_cart", {
@@ -204,7 +239,15 @@ export function buildCartTools(client: Client, profile: UserProfile) {
           restaurantName,
           cartItems: merged
         });
-        return shapeCart(res, profile);
+        if (res?.success === false) return res;
+        try {
+          await memory?.remember(restaurantId, restaurantName);
+        } catch (err) {
+          console.error("Could not remember cart restaurant", err);
+        }
+        // update_food_cart answers with a status, not the cart. Read it back so
+        // the agent and the Cart tab see the same lines and totals.
+        return readCart(addressId);
       }
     }),
 
@@ -220,11 +263,11 @@ export function buildCartTools(client: Client, profile: UserProfile) {
       description: "List coupons available for the current cart. Needs the cart's restaurantId.",
       parameters: z.object({
         restaurantId: z.string(),
-        addressId: z.string(),
+        addressId: z.string().optional().describe("ignored when the user has a saved default address"),
         couponCode: z.string().optional().describe("only to check one specific code")
       }),
       execute: async ({ restaurantId, addressId, couponCode }) =>
-        callSwiggyRaw(client, "fetch_food_coupons", { restaurantId, addressId, couponCode })
+        callSwiggyRaw(client, "fetch_food_coupons", { restaurantId, addressId: cartAddress(addressId), couponCode })
     }),
 
     apply_food_coupon: tool({
@@ -232,14 +275,15 @@ export function buildCartTools(client: Client, profile: UserProfile) {
         "Apply a coupon code to the current cart, then report the new total. Get cartId from get_food_cart first.",
       parameters: z.object({
         couponCode: z.string().min(1),
-        addressId: z.string(),
+        addressId: z.string().optional().describe("ignored when the user has a saved default address"),
         cartId: z.string().optional()
       }),
-      execute: async ({ couponCode, addressId, cartId }) =>
-        shapeCart(
-          await callSwiggyRaw(client, "apply_food_coupon", { couponCode, addressId, cartId }),
-          profile
-        )
+      execute: async ({ couponCode, addressId, cartId }) => {
+        const address = cartAddress(addressId);
+        return withRestaurantId(
+          shapeCart(await callSwiggyRaw(client, "apply_food_coupon", { couponCode, addressId: address, cartId }), profile)
+        );
+      }
     })
   };
 }
