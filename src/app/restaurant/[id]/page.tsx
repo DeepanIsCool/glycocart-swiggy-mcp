@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
+import { RecoverIfExpired } from "@/components/session-recovery";
 import { buildSwiggyTools } from "@/lib/swiggy-tools";
 import { BottomNav } from "@/components/bottom-nav";
 import { RestaurantMenu } from "@/components/restaurant-menu";
@@ -12,7 +13,7 @@ import { BackButton } from "./back-button";
 export const dynamic = "force-dynamic";
 
 /** What the person can do about a failed load: fix a setting, or retry. */
-type LoadError = { message: string; fix: "settings" | "retry" };
+type LoadError = { message: string; fix: "settings" | "retry" | "reconnect" };
 
 export default async function RestaurantPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,7 +33,7 @@ export default async function RestaurantPage({ params }: { params: Promise<{ id:
   } else {
     const client = await getSwiggyClient();
     if (!client) {
-      error = { message: "Your Swiggy session expired. Reconnect from Settings.", fix: "settings" };
+      error = { message: "Your Swiggy session has expired.", fix: "reconnect" };
     } else {
       try {
         menu = await buildSwiggyTools(client, profile).get_restaurant_menu.execute(
@@ -69,11 +70,16 @@ export default async function RestaurantPage({ params }: { params: Promise<{ id:
         <div className="px-5 md:px-10 pt-6">
           <div className="max-w-2xl mx-auto">
             {error && (
+              <RecoverIfExpired expired={error.fix === "reconnect"}>
               <div className="card-solid p-5" role="alert">
                 <p className="font-medium mb-1">This menu didn&apos;t load</p>
                 <p className="text-sm text-ink-muted leading-relaxed">{error.message}</p>
                 <div className="flex flex-wrap gap-2 mt-4">
-                  {error.fix === "settings" ? (
+                  {error.fix === "reconnect" ? (
+                    <a href="/api/auth/swiggy/login" className={`${actionClass} bg-ink text-cream hover:bg-ink-soft`}>
+                      Reconnect Swiggy
+                    </a>
+                  ) : error.fix === "settings" ? (
                     <Link href="/settings" className={`${actionClass} bg-ink text-cream hover:bg-ink-soft`}>
                       Open Settings
                     </Link>
@@ -93,6 +99,7 @@ export default async function RestaurantPage({ params }: { params: Promise<{ id:
                   </Link>
                 </div>
               </div>
+              </RecoverIfExpired>
             )}
 
             {r && <RestaurantHeader r={r} />}

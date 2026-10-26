@@ -26,5 +26,5 @@ export async function setSessionUid(uid: string): Promise<void> {
 
 export async function clearSession(): Promise<void> {
   const jar = await cookies();
-  for (const name of [UID_COOKIE, "swiggy_session", "swiggy_oauth"]) jar.delete(name);
+  for (const name of [UID_COOKIE, "swiggy_session", "swiggy_oauth", "swiggy_client", "gc_cart_restaurant"]) jar.delete(name);
 }

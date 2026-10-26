@@ -10,6 +10,12 @@ import type {
 
 const SESSION_COOKIE = "swiggy_session";
 const HANDSHAKE_COOKIE = "swiggy_oauth";
+// The dynamically registered client must outlive the 10-minute handshake: a
+// refresh token is bound to the client that obtained it. When the client lived
+// only in the handshake cookie, every refresh after ten minutes registered a
+// new client, the refresh failed, and "Reconnect Swiggy" failed with it.
+const CLIENT_COOKIE = "swiggy_client";
+const THIRTY_DAYS = 60 * 60 * 24 * 30;
 
 interface HandshakeState {
   codeVerifier?: string;
@@ -55,11 +61,40 @@ export class CookieOAuthProvider implements OAuthClientProvider {
   }
 
   async clientInformation() {
-    return (await this.readHandshake()).clientInformation;
+    const jar = await cookies();
+    return (
+      decrypt<StoredOAuthClientInformation>(jar.get(CLIENT_COOKIE)?.value) ??
+      // Sessions started before the client moved to its own cookie.
+      (await this.readHandshake()).clientInformation
+    );
   }
 
   async saveClientInformation(info: StoredOAuthClientInformation) {
-    await this.writeHandshake({ clientInformation: info });
+    const jar = await cookies();
+    jar.set(CLIENT_COOKIE, encrypt(info), {
+      httpOnly: true,
+      secure: secureCookie,
+      sameSite: "lax",
+      path: "/",
+      maxAge: THIRTY_DAYS
+    });
+  }
+
+  /**
+   * Called by the SDK when Swiggy rejects stored credentials (invalid_grant,
+   * invalid_client). Without it the SDK retried the same dead refresh token,
+   * and sign-in failed on every attempt until the 30-day cookie expired.
+   */
+  async invalidateCredentials(scope: "all" | "client" | "tokens" | "verifier" | "discovery") {
+    const jar = await cookies();
+    if (scope === "all" || scope === "tokens") jar.delete(SESSION_COOKIE);
+    if (scope === "all" || scope === "client") {
+      jar.delete(CLIENT_COOKIE);
+      await this.writeHandshake({ clientInformation: undefined });
+    }
+    if (scope === "verifier") await this.writeHandshake({ codeVerifier: undefined });
+    if (scope === "discovery") await this.writeHandshake({ discoveryState: undefined });
+    if (scope === "all") jar.delete(HANDSHAKE_COOKIE);
   }
 
   async tokens() {
@@ -74,7 +109,7 @@ export class CookieOAuthProvider implements OAuthClientProvider {
       secure: secureCookie,
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 30
+      maxAge: THIRTY_DAYS
     });
   }
 
@@ -111,5 +146,6 @@ export class CookieOAuthProvider implements OAuthClientProvider {
     const jar = await cookies();
     jar.delete(SESSION_COOKIE);
     jar.delete(HANDSHAKE_COOKIE);
+    jar.delete(CLIENT_COOKIE);
   }
 }

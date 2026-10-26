@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
+import { RecoverIfExpired } from "@/components/session-recovery";
 import { buildOrderTools } from "@/lib/orders-tools";
 import { BottomNav } from "@/components/bottom-nav";
 import { formatINR } from "@/lib/utils";
@@ -24,6 +25,11 @@ function formatOrderedAt(raw: unknown): string | null {
     d = new Date(n < 1e12 ? n * 1000 : n);
   } else if (typeof raw === "string") {
     d = new Date(raw);
+    // A string with no zone parses in the server's zone (UTC on Vercel), which
+    // put every order 5h30m late. Swiggy's times are Indian: read it as IST.
+    if (!Number.isNaN(d.getTime()) && !/(z|gmt|utc|[+-]\d{2}:?\d{2})\s*$/i.test(raw.trim())) {
+      d = new Date(d.getTime() - d.getTimezoneOffset() * 60_000 - 330 * 60_000);
+    }
   } else {
     return null;
   }
@@ -62,7 +68,11 @@ export default async function OrdersPage() {
         );
         orders = res?.orders ?? [];
         if (res?.success === false) {
-          error = { message: "Swiggy didn't return your orders.", action: "retry" };
+          // A saved address deleted in the Swiggy app fails every retry; the
+          // fix is picking another one.
+          error = res?.recovery
+            ? { message: "Your saved delivery address is no longer on your Swiggy account.", action: "address" }
+            : { message: "Swiggy didn't return your orders.", action: "retry" };
         }
       } catch {
         error = { message: "Swiggy didn't return your orders.", action: "retry" };
@@ -82,6 +92,9 @@ export default async function OrdersPage() {
           </div>
 
           {error && (
+            // An expired access token can't be refreshed while rendering here;
+            // try once through a route handler before asking to reconnect.
+            <RecoverIfExpired expired={error.action === "reconnect"}>
             <div className="card-solid p-5 mb-4" role="alert">
               <p className="font-medium mb-1">Orders didn&apos;t load</p>
               <p className="text-sm text-ink-soft leading-relaxed">{error.message}</p>
@@ -104,6 +117,7 @@ export default async function OrdersPage() {
                 )}
               </div>
             </div>
+            </RecoverIfExpired>
           )}
 
           {!error && orders.length === 0 && (
