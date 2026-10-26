@@ -5,7 +5,8 @@ import type { UserProfile } from "@/lib/profile";
 import { getSwiggyClient, getInstamartClient, getDineoutClient } from "@/lib/swiggy-mcp-client";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
-import { appendMessages } from "@/lib/sessions";
+import { appendMessages, getMessages } from "@/lib/sessions";
+import { sanitizeHistory, slimToolResults, turnToStore } from "@/lib/chat-history";
 import { getBudget, budgetSummary } from "@/lib/daily-log";
 import { resolveAiConfig } from "@/lib/ai-provider";
 
@@ -13,14 +14,23 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { messages, provider, customModel, customApiKey, sessionId } = body as {
-    messages: any[];
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return new Response(JSON.stringify({ error: "Invalid request." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+  const { provider, customModel, customApiKey, sessionId, retry } = body as {
     provider?: "openrouter" | "nvidia";
     customModel?: string;
     customApiKey?: string;
     sessionId?: string;
+    retry?: boolean;
   };
+  // Drop tool calls that never got a result (a Stop mid-tool, or a tool that
+  // threw). The SDK's converter throws on them, which broke the whole chat.
+  const messages = sanitizeHistory((body as { messages?: unknown }).messages);
 
   // Identity comes from the signed session, never from the request body — the
   // client must not be able to choose whose metabolic profile gets applied.
@@ -89,34 +99,31 @@ export async function POST(req: Request) {
   const result = streamText({
     model,
     system: systemPrompt,
-    messages: convertToCoreMessages(messages),
+    messages: convertToCoreMessages(slimToolResults(messages) as any),
     tools,
     maxSteps: 6,
     temperature: 0.4,
     // Persist both sides once the turn completes, so a reload restores the
     // conversation. Ownership of sessionId is verified inside appendMessages.
-    onFinish: async ({ text, toolCalls, toolResults, steps }) => {
+    onFinish: async ({ steps }) => {
       if (!sessionId) return;
-      const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
-
-      // `toolCalls`/`toolResults` describe only the FINAL step. With maxSteps the
-      // last step is the text reply, so both were always empty and no tool
-      // result was ever saved — reopening a chat lost every card. Flatten every
-      // step instead.
-      const allCalls = steps?.flatMap((s: any) => s.toolCalls ?? []) ?? toolCalls ?? [];
-      const allResults = steps?.flatMap((s: any) => s.toolResults ?? []) ?? toolResults ?? [];
+      const lastUser = [...messages].reverse().find((m) => m.role === "user");
+      // Only calls that got a result are saved, so a reopened chat never holds
+      // an unresolved call; text is joined across every step.
+      const turn = turnToStore((steps ?? []) as any[]);
 
       try {
+        // "Try again" resends the same question. If it is already the last
+        // question saved, don't save it a second time.
+        let saveUser = !!lastUser;
+        if (saveUser && retry) {
+          const stored = await getMessages(uid, sessionId);
+          const prevUser = [...stored].reverse().find((m) => m.role === "user");
+          saveUser = prevUser?.content !== String(lastUser!.content ?? "");
+        }
         await appendMessages(uid, sessionId, [
-          ...(lastUser ? [{ role: "user" as const, content: String(lastUser.content ?? ""), toolInvocations: null }] : []),
-          {
-            role: "assistant" as const,
-            content: text ?? "",
-            toolInvocations:
-              allCalls.length || allResults.length
-                ? { toolCalls: allCalls, toolResults: allResults }
-                : null
-          }
+          ...(saveUser ? [{ role: "user" as const, content: String(lastUser!.content ?? ""), toolInvocations: null }] : []),
+          { role: "assistant" as const, content: turn.text, toolInvocations: turn.toolInvocations }
         ]);
       } catch (err) {
         // Never fail a reply because history couldn't be written.

@@ -41,12 +41,15 @@ export function ToolCallCard({
   toolName,
   args,
   result,
-  state
+  state,
+  stopped = false
 }: {
   toolName: string;
   args?: any;
   result?: any;
   state: "call" | "result" | "partial-call";
+  /** The turn ended (Stop, or an error) before this call returned. */
+  stopped?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -74,7 +77,9 @@ export function ToolCallCard({
         {/* min-w-0 everywhere a truncate lives: without it a long label set the
             page's minimum width, and the whole chat scrolled sideways on a
             375px screen. */}
-        {!isDone ? (
+        {!isDone && stopped ? (
+          <AlertCircle size={14} className="text-ink-muted shrink-0" aria-hidden />
+        ) : !isDone ? (
           <Loader2 size={14} className="text-ink-muted animate-spin shrink-0" aria-hidden />
         ) : failed ? (
           <AlertCircle size={14} className="text-ember-text shrink-0" aria-hidden />
@@ -83,7 +88,7 @@ export function ToolCallCard({
         )}
         <span className={cn("flex-1 min-w-0 truncate text-[0.8125rem]", isDone ? "text-ink-soft" : "text-ink")}>
           {label}
-          {!isDone && "…"}
+          {!isDone && (stopped ? ". Stopped" : "…")}
           {failed && <span className="sr-only"> (failed)</span>}
         </span>
         <ChevronDown

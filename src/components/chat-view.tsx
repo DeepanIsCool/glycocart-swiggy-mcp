@@ -84,6 +84,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   /** Ignores a slow session load that a newer tap has superseded. */
   const loadSeq = useRef(0);
   const addingRef = useRef(false);
+  const [errorHidden, setErrorHidden] = useState(false);
 
   // Model choice lives in Settings now; the chat just reads it.
   const [ai, setAi] = useState<AiSettings>(DEFAULTS);
@@ -176,6 +177,8 @@ export function ChatView({ profile }: { profile: ProfileView }) {
     reload
   } = useChat({
     api: "/api/chat",
+    // The history list is ordered by last activity; refresh it after a reply.
+    onFinish: () => setSessionsKey((k) => k + 1),
     body: {
       provider: ai.provider,
       customModel: ai.model,
@@ -187,6 +190,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   /** Create the session lazily on first send, so empty chats never persist. */
   async function ensureSession(firstMessage: string): Promise<string | null> {
     if (sessionId) return sessionId;
+    const seq = loadSeq.current;
     try {
       const res = await fetch("/api/sessions", {
         method: "POST",
@@ -195,6 +199,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       });
       if (!res.ok) return null;
       const { session } = await res.json();
+      if (seq !== loadSeq.current) return null;
       setSessionId(session.id);
       setSessionsKey((k) => k + 1);
       return session.id;
@@ -205,6 +210,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
 
   async function loadSession(id: string) {
     if (isLoading) stop();
+    setErrorHidden(true);
     setSidebarOpen(false);
     setSessionId(id);
     setNotice(null);
@@ -243,6 +249,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   function newChat() {
     // A reply still streaming would otherwise land in the fresh chat.
     if (isLoading) stop();
+    setErrorHidden(true);
     loadSeq.current++;
     setSidebarOpen(false);
     setSessionId(null);
@@ -278,6 +285,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
     if (!text || isLoading || submittingRef.current) return;
     if (!validateApiKey()) return;
     submittingRef.current = true;
+    setErrorHidden(false);
     if (notice?.tone === "error") setNotice(null);
     if (fromComposer) setInput("");
     stickRef.current = true;
@@ -285,7 +293,11 @@ export function ChatView({ profile }: { profile: ProfileView }) {
       // Pass the id explicitly: setSessionId() won't have re-rendered before
       // append() reads the hook body, so a fresh session would post sessionId=null
       // and the transcript would never be saved.
+      const seq = loadSeq.current;
       const id = await ensureSession(text);
+      // New chat or a saved chat opened while the session was being created:
+      // this message belongs to neither, so drop it rather than misfile it.
+      if (seq !== loadSeq.current) return;
       append({ role: "user", content: text }, { body: { sessionId: id } });
     } finally {
       submittingRef.current = false;
@@ -299,7 +311,9 @@ export function ChatView({ profile }: { profile: ProfileView }) {
 
   /** Enter sends, Shift+Enter is a new line. Never mid-IME-composition. */
   const handleComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+    // Safari confirms an IME composition with an Enter whose isComposing is
+    // false but keyCode is 229.
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || e.keyCode === 229) return;
     e.preventDefault();
     void send(input, true);
   };
@@ -307,7 +321,9 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   const retry = () => {
     if (!validateApiKey()) return;
     stickRef.current = true;
-    reload({ body: { sessionId } });
+    setErrorHidden(false);
+    // `retry` tells the server this question is already saved.
+    reload({ body: { sessionId, retry: true } });
   };
 
   // Settings can change in another tab, or on the Settings screen itself.
@@ -393,7 +409,9 @@ export function ChatView({ profile }: { profile: ProfileView }) {
   const empty = messages.length === 0 && !loadingSession && !sessionLoadFailed;
   const lastMessage = messages[messages.length - 1];
   const waitingForFirstToken = isLoading && lastMessage?.role === "user";
-  const errorText = error ? describeChatError(error) : null;
+  // useChat only clears `error` on the next request, so the card followed the
+  // user into a new or reopened chat, where Try again regenerated the wrong one.
+  const errorText = error && !errorHidden ? describeChatError(error) : null;
   const errorAction = errorText ? errorRecovery(errorText) : null;
 
   return (
@@ -495,6 +513,7 @@ export function ChatView({ profile }: { profile: ProfileView }) {
                         args={t.args}
                         result={t.state === "result" ? t.result : undefined}
                         state={t.state}
+                        stopped={!isLoading}
                       />
                     ))}
 
@@ -863,7 +882,11 @@ function extractScoredItems(msg: any): ScoredItem[] {
       }
     }
   }
-  const scored = out.filter((i) => i?.glycemic);
+  // Menus arrive in Swiggy's order, not ranked, yet the cards are numbered
+  // 1 to 5 as best fit first. Rank by this person's match score.
+  const scored = out
+    .filter((i) => i?.glycemic)
+    .sort((a: any, b: any) => (b.glycemic?.match_score ?? 0) - (a.glycemic?.match_score ?? 0));
   const unscored = out.filter((i) => i && !i.glycemic);
   return [...scored, ...unscored].slice(0, 5);
 }
@@ -879,13 +902,18 @@ function restoreInvocations(stored: any): any[] | undefined {
   const results = new Map(
     (stored.toolResults ?? []).map((r: any) => [r?.toolCallId, r?.result])
   );
-  return calls.map((c: any) => ({
-    toolCallId: c?.toolCallId,
-    toolName: c?.toolName,
-    args: c?.args,
-    state: results.has(c?.toolCallId) ? "result" : "call",
-    result: results.get(c?.toolCallId)
-  }));
+  // A call saved without a result (a tool that threw) can't be shown as done,
+  // and sending it back made the server reject the whole chat. Skip it.
+  const restored = calls
+    .filter((c: any) => results.has(c?.toolCallId))
+    .map((c: any) => ({
+      toolCallId: c?.toolCallId,
+      toolName: c?.toolName,
+      args: c?.args,
+      state: "result",
+      result: results.get(c?.toolCallId)
+    }));
+  return restored.length ? restored : undefined;
 }
 
 /**
