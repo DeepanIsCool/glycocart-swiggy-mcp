@@ -67,7 +67,9 @@ export function DishCard({
   const outOfStock = item.in_stock === false;
   const showImage = item.image_url && !imgFailed;
 
-  const canAdd = Boolean(onAddToCart && item.restaurant_id && !outOfStock);
+  // Both ids go to the cart. A dish without its own id showed the button and
+  // then failed with "Invalid cart request".
+  const canAdd = Boolean(onAddToCart && item.restaurant_id && item.id && !outOfStock);
 
   return (
     // Out of stock used to fade the whole card to 60%, which took the muted
@@ -281,10 +283,11 @@ export function DishCard({
             </Link>
           )}
 
-          {onAddToCart && !item.restaurant_id && !outOfStock && (
+          {onAddToCart && !canAdd && !outOfStock && (
             <p className="text-xs text-ink-muted mt-3">
-              Swiggy didn&apos;t return a restaurant for this result, so it can&apos;t be added
-              from here. Open the restaurant to add it.
+              {item.restaurant_id
+                ? "Swiggy didn't return an id for this dish, so it can't be added from here. Open the full menu to add it."
+                : "Swiggy didn't return a restaurant for this result, so it can't be added from here. Open the restaurant to add it."}
             </p>
           )}
         </div>

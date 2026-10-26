@@ -18,7 +18,7 @@ figure is labelled an estimate.
 
 ## Before pushing
 
-`npm test && npm run build`. Fourteen suites; each was written against a bug that
+`npm test && npm run build`. Fifteen suites; each was written against a bug that
 actually shipped, and each was verified to fail without its fix.
 
 ## Design rules

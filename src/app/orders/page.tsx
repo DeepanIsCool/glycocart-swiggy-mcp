@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
-import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
+import { getSwiggyClient, closeClients } from "@/lib/swiggy-mcp-client";
 import { RecoverIfExpired } from "@/components/session-recovery";
 import { parseOrderedAt } from "@/lib/order-time";
 import { buildOrderTools } from "@/lib/orders-tools";
@@ -63,6 +63,8 @@ export default async function OrdersPage() {
         }
       } catch {
         error = { message: "Swiggy didn't return your orders.", action: "retry" };
+      } finally {
+        await closeClients(client);
       }
     }
   }

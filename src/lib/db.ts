@@ -98,6 +98,15 @@ async function ensureSchema() {
       updated_at       timestamptz not null default now()
     )
   `;
+  // Salted hashes of the account's saved address ids, used to tell accounts
+  // apart when the access token has no subject (see account-match.ts).
+  await sql`
+    create table if not exists account_addresses (
+      user_id    text not null,
+      addr_hash  text not null,
+      primary key (user_id, addr_hash)
+    )
+  `;
   initialised = true;
 }
 
@@ -119,6 +128,7 @@ export async function deleteProfile(uid: string): Promise<void> {
   await sql`delete from chat_sessions where user_id = ${uid}`;
   await sql`delete from daily_log where user_id = ${uid}`;
   await sql`delete from cart_context where user_id = ${uid}`;
+  await sql`delete from account_addresses where user_id = ${uid}`;
   await sql`delete from user_profiles where id = ${uid}`;
 }
 
@@ -154,5 +164,23 @@ export async function setCartRestaurant(uid: string, id: string, name: string): 
       set restaurant_id = excluded.restaurant_id,
           restaurant_name = excluded.restaurant_name,
           updated_at = now()
+  `;
+}
+
+export async function getAccountAddresses(uid: string): Promise<string[]> {
+  await ensureSchema();
+  const sql = client();
+  const rows = (await sql`select addr_hash from account_addresses where user_id = ${uid}`) as { addr_hash: string }[];
+  return rows.map((r) => r.addr_hash);
+}
+
+export async function addAccountAddresses(uid: string, hashes: string[]): Promise<void> {
+  if (hashes.length === 0) return;
+  await ensureSchema();
+  const sql = client();
+  await sql`
+    insert into account_addresses (user_id, addr_hash)
+    select ${uid}, unnest(${hashes}::text[])
+    on conflict do nothing
   `;
 }

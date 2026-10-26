@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
-import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
+import { getSwiggyClient, closeClients } from "@/lib/swiggy-mcp-client";
 import { buildSwiggyTools } from "@/lib/swiggy-tools";
 
 export const runtime = "nodejs";
@@ -16,13 +16,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!profile?.defaultAddressId) {
     return NextResponse.json({ error: "Pick a delivery address in Settings first." }, { status: 403 });
   }
+  // "?page=abc" reached Swiggy as NaN.
+  const page = Number(new URL(req.url).searchParams.get("page") ?? 2);
+  if (!Number.isInteger(page) || page < 1) return NextResponse.json({ error: "Invalid page." }, { status: 400 });
+
   const client = await getSwiggyClient();
   if (!client) return NextResponse.json({ error: "Swiggy session expired." }, { status: 401 });
-
-  const page = Number(new URL(req.url).searchParams.get("page") ?? 2);
-  const menu = await buildSwiggyTools(client, profile).get_restaurant_menu.execute(
-    { addressId: profile.defaultAddressId, restaurantId: id, page, pageSize: 8 },
-    { toolCallId: "ui", messages: [] } as any
-  );
-  return NextResponse.json(menu);
+  try {
+    const menu = await buildSwiggyTools(client, profile).get_restaurant_menu.execute(
+      { addressId: profile.defaultAddressId, restaurantId: id, page, pageSize: 8 },
+      { toolCallId: "ui", messages: [] } as any
+    );
+    return NextResponse.json(menu);
+  } finally {
+    await closeClients(client);
+  }
 }

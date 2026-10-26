@@ -15,7 +15,7 @@ export async function PATCH(req: Request) {
   const uid = await getSessionUid();
   if (!uid) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const parsed = schema.safeParse(await req.json());
+  const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid address." }, { status: 400 });
 
   const profile = await getProfile(uid);

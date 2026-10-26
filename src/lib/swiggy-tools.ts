@@ -38,8 +38,23 @@ export function unwrapSwiggy<T = any>(res: any): T {
   return cur as T;
 }
 
+/** The message to show for a call that threw, without leaking a stack. */
+export function thrownMessage(name: string, err: unknown): string {
+  const msg = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  return msg.trim() ? `${name} failed: ${msg.split("\n")[0]}` : `${name} failed`;
+}
+
 async function callSwiggy(client: Client, name: string, args: Record<string, unknown>) {
-  const res = await client.callTool({ name, arguments: args });
+  // A network drop, a timeout or a failed token refresh makes callTool throw.
+  // Thrown inside a tool, that ended the whole chat reply with an error; from
+  // a route, it was an unhandled 500. Report it like any failed call instead.
+  let res: Awaited<ReturnType<Client["callTool"]>>;
+  try {
+    res = await client.callTool({ name, arguments: args });
+  } catch (err) {
+    console.error(`Swiggy ${name} threw`, err);
+    return { success: false, error: { message: thrownMessage(name, err) } };
+  }
 
   // An error can carry structuredContent too; returning it as-is made a failed
   // call look like success to every caller that checks `success === false`.

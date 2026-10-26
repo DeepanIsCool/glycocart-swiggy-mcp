@@ -5,10 +5,15 @@ import {
   SWIGGY_FOOD_MCP_URL,
   SWIGGY_REDIRECT_URI,
   getSwiggyClient,
+  closeClients,
   resolveUid
 } from "@/lib/swiggy-mcp-client";
 import { setSessionUid, getSessionUid } from "@/lib/session";
-import { getProfile } from "@/lib/db";
+import { getProfile, getAccountAddresses, addAccountAddresses } from "@/lib/db";
+import { callSwiggyRaw, unwrapSwiggy } from "@/lib/swiggy-tools";
+import { sameAccount } from "@/lib/account-match";
+import { deriveUid } from "@/lib/crypto";
+import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
 
@@ -43,7 +48,29 @@ export async function GET(req: Request) {
 
   // Reuse the id already in this browser's session if there is one, so a
   // re-login on the same device keeps the existing profile.
-  const uid = await resolveUid(await getSessionUid());
+  const existing = await getSessionUid();
+  const resolved = await resolveUid(existing);
+  let uid = resolved.uid;
+
+  // With no account id in the token, the browser's id is only right if this
+  // is the same account. Check by saved addresses; a different account gets a
+  // fresh id instead of the previous person's profile.
+  if (!resolved.fromAccount) {
+    try {
+      const res = await callSwiggyRaw(client, "get_addresses", {});
+      const ids: string[] = (unwrapSwiggy<any>(res)?.addresses ?? [])
+        .map((a: any) => (a?.id == null ? "" : String(a.id)))
+        .filter(Boolean);
+      const hashes = ids.map((id) => deriveUid(`address:${id}`));
+      if (existing && res?.success !== false && sameAccount(await getAccountAddresses(existing), hashes) === false) {
+        uid = randomUUID();
+      }
+      await addAccountAddresses(uid, hashes);
+    } catch (err) {
+      console.error("Could not check the account's addresses", err);
+    }
+  }
+  await closeClients(client);
   await setSessionUid(uid);
 
   let hasProfile = false;

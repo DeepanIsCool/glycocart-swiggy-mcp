@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
-import { getSwiggyClient } from "@/lib/swiggy-mcp-client";
+import { getSwiggyClient, closeClients } from "@/lib/swiggy-mcp-client";
 import { RecoverIfExpired } from "@/components/session-recovery";
 import { wantsVegOnly } from "@/lib/preferences";
 import { buildSwiggyTools } from "@/lib/swiggy-tools";
@@ -47,6 +47,8 @@ export default async function RestaurantPage({ params }: { params: Promise<{ id:
         }
       } catch {
         error = { message: "Couldn't load this menu from Swiggy.", fix: "retry" };
+      } finally {
+        await closeClients(client);
       }
     }
   }

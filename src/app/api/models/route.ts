@@ -23,10 +23,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "You're signed out. Sign in again to load models.", reason: "session" }, { status: 401 });
   }
 
-  let body: { provider?: unknown; customApiKey?: unknown };
-  try {
-    body = await req.json();
-  } catch {
+  // A body of `null` parses fine and then crashed resolveAiConfig.
+  const body: { provider?: unknown; customApiKey?: unknown } | null = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 

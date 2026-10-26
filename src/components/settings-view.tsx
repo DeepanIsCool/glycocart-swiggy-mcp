@@ -146,7 +146,7 @@ export function SettingsView({
   async function loadAddresses() {
     setAddresses({ status: "loading" });
     try {
-      const res = await fetch("/api/swiggy/context");
+      const res = await fetch("/api/swiggy/context?addresses_only=1");
       if (!res.ok) throw new Error();
       const data = await res.json();
       setAddresses({ status: "ready", list: Array.isArray(data.addresses) ? data.addresses : [] });
