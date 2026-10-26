@@ -20,7 +20,7 @@ interface ModelView {
  */
 export async function POST(req: Request) {
   if (!(await getSessionUid())) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+    return NextResponse.json({ error: "You're signed out. Sign in again to load models.", reason: "session" }, { status: 401 });
   }
 
   let body: { provider?: unknown; customApiKey?: unknown };
@@ -31,7 +31,11 @@ export async function POST(req: Request) {
   }
 
   const ai = resolveAiConfig(body, process.env);
-  if (!ai.ok) return NextResponse.json({ error: ai.error }, { status: ai.status });
+  if (!ai.ok) {
+    // "config": nothing will run until a key is added, so the UI must not
+    // promise that the default works.
+    return NextResponse.json({ error: ai.error, reason: ai.status === 401 ? "config" : "key" }, { status: ai.status });
+  }
 
   try {
     const response = await fetch(`${ai.baseURL}/models`, {
@@ -41,7 +45,10 @@ export async function POST(req: Request) {
     if (!response.ok) {
       const status = response.status === 401 || response.status === 403 ? 401 : 502;
       return NextResponse.json(
-        { error: status === 401 ? "The provider rejected that API key." : `The provider returned ${response.status}.` },
+        {
+          error: status === 401 ? "The provider rejected that API key." : `The provider returned ${response.status}.`,
+          reason: status === 401 ? "key" : "provider"
+        },
         { status }
       );
     }

@@ -402,6 +402,8 @@ function AiSection() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [keyStatus, setKeyStatus] = useState<KeyStatus>("idle");
+  // True when chat itself can't run (no key anywhere), not just the list.
+  const [modelsBroken, setModelsBroken] = useState(false);
   const keyId = useId();
   const keyHelpId = useId();
   const modelLabelId = useId();
@@ -422,6 +424,7 @@ function AiSection() {
     let cancelled = false;
     setModels([]);
     setModelsError(null);
+    setModelsBroken(false);
 
     if (needsKey) {
       setKeyStatus("idle");
@@ -449,11 +452,14 @@ function AiSection() {
         if (res.ok && Array.isArray(data.models)) {
           setModels(data.models as ModelInfo[]);
           if (key) setKeyStatus("valid");
-        } else if (key && res.status === 401) {
+        } else if (key && res.status === 401 && data.reason === "key") {
+          // Only a provider rejection means the key is bad; a signed-out
+          // session also answers 401.
           setKeyStatus("rejected");
         } else {
           if (key) setKeyStatus("unverified");
           setModelsError(typeof data.error === "string" ? data.error : "The model list didn't load.");
+          setModelsBroken(data.reason === "config");
         }
       } catch {
         if (cancelled) return;
@@ -615,7 +621,8 @@ function AiSection() {
             />
             {modelsError && (
               <p className="text-xs text-ink-muted leading-relaxed mt-2">
-                {modelsError} The default model still works.
+                {modelsError}
+                {modelsBroken ? "" : " The default model still works."}
               </p>
             )}
           </>

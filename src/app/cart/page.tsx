@@ -14,7 +14,7 @@ export default async function CartPage() {
 
   return (
     <>
-      <main className="app-scroll px-5 md:px-10 py-8">
+      <main className="app-scroll px-5 md:px-10 pt-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-6">
             <h1 className="display text-4xl leading-tight">Cart</h1>

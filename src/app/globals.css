@@ -113,7 +113,9 @@
   /* Fixed-height page that must not slide under the bottom tab bar. */
   .app-main { height: calc(100dvh - var(--nav-h)); }
   /* Scrolling page: reserve room so the last element clears the tab bar. */
-  .app-scroll { min-height: calc(100dvh - var(--nav-h)); padding-bottom: 1.5rem; }
+  /* The tab bar is fixed, so the page must reserve its height or the last
+     card on every screen sits underneath it. */
+  .app-scroll { min-height: calc(100dvh - var(--nav-h)); padding-bottom: calc(var(--nav-h) + 1.5rem); }
   /* 13px floor with looser-but-not-extreme tracking. The previous 0.14em on
      uppercase micro-text measurably hurt legibility.
      Reserved for genuinely technical strings: tool names, argument dumps,

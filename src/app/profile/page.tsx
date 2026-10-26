@@ -89,7 +89,7 @@ export default async function ProfilePage() {
 
   return (
     <>
-      <main className="app-scroll px-5 md:px-10 py-8">
+      <main className="app-scroll px-5 md:px-10 pt-8">
         <div className="max-w-2xl mx-auto">
           <header className="flex items-start justify-between gap-4 mb-8">
             <div className="min-w-0">

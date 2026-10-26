@@ -23,6 +23,8 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
   const [results, setResults] = useState<DineoutRestaurantView[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What actually fixes the failure: a retry won't help a missing address or a dead session.
+  const [fix, setFix] = useState<"address" | "reconnect" | null>(null);
   // Tapping a second vibe before the first answered let the slower, older
   // response overwrite the newer one. Only the latest request may land.
   const requestId = useRef(0);
@@ -35,10 +37,12 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
     setSearched(term);
     setLoading(true);
     setError(null);
+    setFix(null);
     try {
       const res = await fetch(`/api/dineout?q=${encodeURIComponent(term)}`);
       const data = await res.json().catch(() => null);
       if (mine !== requestId.current) return;
+      if (!res.ok) setFix(data?.needsAddress ? "address" : data?.reconnect ? "reconnect" : null);
       if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "Dineout search failed.");
       setResults(Array.isArray(data?.restaurants) ? data.restaurants : []);
     } catch (err) {
@@ -136,7 +140,17 @@ export function DineoutView({ addressLabel }: { addressLabel?: string }) {
         <div className="card-solid p-5 mb-4" role="alert">
           <p className="font-medium mb-1">Search didn&apos;t go through</p>
           <p className="text-sm text-ink-muted leading-relaxed">{error}</p>
-          {searched && (
+          {fix === "address" && (
+            <a href="/settings" className={cn("btn-primary mt-4 min-h-11 text-sm", FOCUS_RING)}>
+              Pick an address in Settings
+            </a>
+          )}
+          {fix === "reconnect" && (
+            <a href="/api/auth/swiggy/login" className={cn("btn-primary mt-4 min-h-11 text-sm", FOCUS_RING)}>
+              Reconnect Swiggy
+            </a>
+          )}
+          {searched && !fix && (
             <button
               type="button"
               onClick={() => search(searched)}
