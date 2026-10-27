@@ -4,13 +4,15 @@ import { getSessionUid } from "@/lib/session";
 import { getProfile } from "@/lib/db";
 import { getSwiggyClient, closeClients } from "@/lib/swiggy-mcp-client";
 import { buildCartTools } from "@/lib/cart-tools";
+import { callSwiggyRaw } from "@/lib/swiggy-tools";
+import type { Client } from "@modelcontextprotocol/client";
 import { cartMemory } from "@/lib/cart-memory";
 import type { UserProfile } from "@/lib/profile";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Ctx = { tools: ReturnType<typeof buildCartTools>; profile: UserProfile };
+type Ctx = { tools: ReturnType<typeof buildCartTools>; profile: UserProfile; client: Client };
 
 /**
  * Cart operations driven by the UI rather than the agent. Mirrors the same
@@ -25,7 +27,7 @@ async function withCart(run: (ctx: Ctx) => Promise<Response>): Promise<Response>
   const client = await getSwiggyClient();
   if (!client) return NextResponse.json({ error: "Swiggy session expired." }, { status: 401 });
   try {
-    return await run({ tools: buildCartTools(client, profile, cartMemory(uid)), profile });
+    return await run({ tools: buildCartTools(client, profile, cartMemory(uid)), profile, client });
   } finally {
     await closeClients(client);
   }
@@ -33,10 +35,20 @@ async function withCart(run: (ctx: Ctx) => Promise<Response>): Promise<Response>
 
 const opts = { toolCallId: "ui", messages: [] };
 
-export async function GET() {
-  return withCart(async ({ tools, profile }) => {
+export async function GET(req: Request) {
+  return withCart(async ({ tools, profile, client }) => {
     const addressId = profile.defaultAddressId;
     if (!addressId) return NextResponse.json({ items: [], needsAddress: true });
+    // ?raw=1: the signed-in user's own cart exactly as Swiggy returned it. Its
+    // bill schema is undocumented, so this is how to check what it really sends
+    // when the Cart tab and the Swiggy app disagree. Read-only, own data only.
+    if (new URL(req.url).searchParams.get("raw") === "1") {
+      return NextResponse.json({
+        addressId,
+        raw: await callSwiggyRaw(client, "get_food_cart", { addressId }),
+        shaped: await tools.get_food_cart.execute({ addressId }, opts)
+      });
+    }
     return NextResponse.json(await tools.get_food_cart.execute({ addressId }, opts));
   });
 }

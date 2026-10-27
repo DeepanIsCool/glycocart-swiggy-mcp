@@ -136,7 +136,10 @@ async function main() {
   const cart: any = await tools.get_food_cart.execute({ addressId: "addr-1" }, ctx);
   assert.equal(cart.pricing.to_pay, 129, "to_pay must come from Swiggy, not our arithmetic");
   assert.equal(cart.items.length, 1);
-  assert.equal(cart.items[0].price, 99);
+  assert.equal(cart.items[0].price_line, 99);
+  assert.equal(cart.items[0].price_each, 99, "quantity 1: the price is both per item and per line");
+  assert.equal(cart.bill.to_pay, 129, "the bill's total is Swiggy's");
+  assert.deepEqual(cart.bill.lines.map((l: any) => l.amount), [99, 0, 30], "every charge Swiggy sent is a line");
   // Double-nested payload must still resolve.
   assert.equal(cart.restaurant.name, "Food Peddler Sandwiches");
   assert.ok(cart.glucose.total_carbs_g > 0, "cart glucose load should be estimated");

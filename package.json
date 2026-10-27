@@ -27,6 +27,7 @@
     "test:envelope": "tsc src/lib/swiggy-envelope.test.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/swiggy-envelope.test.js",
     "test:order-time": "tsc src/lib/order-time.test.ts src/lib/order-time.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/order-time.test.js && TZ=Asia/Kolkata node .test-build/order-time.test.js && TZ=America/New_York node .test-build/order-time.test.js",
     "test:mcp-tools": "tsc src/lib/mcp-tools.test.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/mcp-tools.test.js",
+    "test:cart-bill": "tsc src/lib/cart-bill.test.ts src/lib/cart-bill.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/cart-bill.test.js",
     "test:dineout": "tsc src/lib/dineout-tools.test.ts src/lib/dineout-tools.ts src/lib/glycemic.ts src/lib/nutrition-estimate.ts src/lib/catalog.ts src/lib/profile.ts src/lib/swiggy-image.ts --outDir .test-build --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck && node .test-build/dineout-tools.test.js"
   },
   "dependencies": {
