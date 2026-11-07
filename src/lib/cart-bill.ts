@@ -26,7 +26,7 @@ export interface Bill {
 const TOTAL_KEYS = /^(to_?pay|grand_?total|total_?(amount|payable|bill)?|net_?(payable|amount)|payable(_?amount)?|amount_?payable|final_?(amount|total))$/i;
 const DISCOUNT = /discount|saving|coupon|offer|cashback|rebate/i;
 // Not charges: ids, counts, flags and display-only fields that happen to be numbers.
-const SKIP = /(^|_)(id|count|quantity|qty|percent|percentage|rate|version)$|^(id|count|is_?\w+)$/i;
+const SKIP = /(^|_)(id|count|quantity|qty|percent|percentage|rate|version)$|^(id|count|is_?\w+)$|^(total_|num_|no_of_)?items?$|^(num|no_of)_/i;
 
 const KNOWN_LABELS: Record<string, string> = {
   item_total: "Item total",

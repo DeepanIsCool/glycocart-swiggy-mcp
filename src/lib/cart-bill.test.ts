@@ -50,7 +50,7 @@ import { normalizeBill, linePrice } from "./cart-bill";
 
 // Ids and counts are not charges.
 {
-  const b = normalizeBill({ cart_id: 950587483, item_count: 2, item_total: 100, to_pay: 100 })!;
+  const b = normalizeBill({ cart_id: 950587483, item_count: 2, totalItems: 3, num_items: 3, item_total: 100, to_pay: 100 })!;
   assert.deepEqual(b.lines.map((l) => l.label), ["Item total"]);
 }
 

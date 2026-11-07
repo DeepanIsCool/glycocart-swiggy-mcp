@@ -486,7 +486,9 @@ function AiSection() {
       : keyStatus === "checking"
         ? { text: `Checking the key with ${providerName}…`, tone: "muted" }
         : keyStatus === "valid"
-          ? { text: `${providerName} accepted this key.`, tone: "good" }
+          // Loading the model list doesn't prove the key: providers usually
+          // serve that list without one. Only a rejection is conclusive.
+          ? { text: `Format looks right. ${providerName} checks the key itself on your first message.`, tone: "good" }
           : keyStatus === "rejected"
             ? { text: `${providerName} rejected this key. Check it was copied in full.`, tone: "bad" }
             : keyStatus === "unverified"
