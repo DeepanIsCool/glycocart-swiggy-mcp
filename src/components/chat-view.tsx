@@ -392,11 +392,17 @@ export function ChatView({ profile }: { profile: ProfileView }) {
     if (isLoading && !wasLoading.current) {
       setAnnouncement("GlycoCart is working on a reply.");
     } else if (!isLoading && wasLoading.current) {
-      const last = messages[messages.length - 1];
-      if (last?.role === "assistant") {
-        const dishes = extractScoredItems(last).length;
+      // A reply with tool steps arrives as several assistant messages: the
+      // cards in an earlier one, the text in the last. Counting only the last
+      // always announced zero dishes.
+      const turn: typeof messages = [];
+      for (let i = messages.length - 1; i >= 0 && messages[i].role === "assistant"; i--) turn.unshift(messages[i]);
+      const last = turn[turn.length - 1];
+      if (last) {
+        const dishes = turn.reduce((n, m) => n + extractScoredItems(m).length, 0);
+        const text = [...turn].reverse().find((m) => m.content)?.content;
         const parts: string[] = [];
-        if (last.content) parts.push(plainText(last.content));
+        if (text) parts.push(plainText(text));
         if (dishes > 0) parts.push(`${dishes} ${dishes === 1 ? "dish" : "dishes"} shown.`);
         setAnnouncement(parts.join(" ") || "Reply finished.");
       }

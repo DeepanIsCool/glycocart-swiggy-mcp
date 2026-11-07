@@ -23,8 +23,9 @@ interface CartItem {
   menu_item_id: string;
   name: string;
   quantity: number;
-  price?: number;
-  strikeout_price?: number;
+  /** Set only when Swiggy's fields make per-item vs per-line unambiguous. */
+  price_each?: number | null;
+  price_line?: number | null;
   image_url?: string | null;
   in_stock?: boolean;
 }
@@ -35,12 +36,8 @@ interface Cart {
   delivery_eta?: string | null;
   needsAddress?: boolean;
   items: CartItem[];
-  pricing: {
-    item_total?: number;
-    delivery_charge?: number;
-    taxes_and_charges?: number;
-    to_pay?: number;
-  } | null;
+  /** Every charge Swiggy sent, in its order (see src/lib/cart-bill.ts). */
+  bill?: { lines: { label: string; amount: number }[]; to_pay: number | null; unbalanced: boolean } | null;
   offers?: { coupon_applied?: string; coupon_discount?: number } | null;
   glucose?: {
     scored_items: number;
@@ -206,7 +203,7 @@ export function CartView({ addressLabel }: { addressLabel: string | null }) {
   }
 
   const g = cart?.glucose;
-  const p = cart?.pricing;
+  const bill = cart?.bill;
   // The cart response often carries only a restaurant name, and the update
   // call needs the id. Without it, quantities are read-only here.
   const canEdit = Boolean(cart?.restaurant?.id && cart?.restaurant?.name);
@@ -253,13 +250,12 @@ export function CartView({ addressLabel }: { addressLabel: string | null }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium break-words leading-snug">{i.name}</p>
                   {outOfStock && <p className="text-xs text-ember-text mt-0.5">Out of stock</p>}
-                  {typeof i.price === "number" && (
+                  {typeof i.price_line === "number" && (
                     <p className="text-sm tabular-nums text-ink-soft mt-0.5">
-                      {formatINR(i.price)}
-                      {typeof i.strikeout_price === "number" && (
-                        <span className="ml-1.5 text-xs text-ink-muted line-through">
-                          <span className="sr-only">was </span>
-                          {formatINR(i.strikeout_price)}
+                      {formatINR(i.price_line)}
+                      {typeof i.price_each === "number" && Number(i.quantity) > 1 && (
+                        <span className="ml-1.5 text-xs text-ink-muted">
+                          {formatINR(i.price_each)} each
                         </span>
                       )}
                     </p>
@@ -316,32 +312,36 @@ export function CartView({ addressLabel }: { addressLabel: string | null }) {
 
       {g && <GlucoseSummary g={g} />}
 
-      {/* Pricing straight from Swiggy, never computed here */}
-      {p && (
+      {/* Every charge as Swiggy states it; nothing computed here. */}
+      {bill && (
         <section className="card-solid p-4 text-sm" aria-labelledby="bill-heading">
           <h2 id="bill-heading" className="section-label mb-2">
             Bill from Swiggy
           </h2>
           <dl className="space-y-1.5">
-            <Row label="Item total" value={p.item_total} />
-            <Row label="Delivery" value={p.delivery_charge} />
-            <Row label="Taxes and charges" value={p.taxes_and_charges} />
-            {cart?.offers?.coupon_discount ? (
-              <Row
-                label={`Coupon${cart.offers.coupon_applied ? ` (${cart.offers.coupon_applied})` : ""}`}
-                value={-cart.offers.coupon_discount}
-              />
-            ) : null}
+            {bill.lines.map((l, idx) => (
+              <Row key={`${l.label}-${idx}`} label={l.label} value={l.amount} />
+            ))}
             <div className="flex items-center justify-between pt-2 mt-1 border-t border-ink/10 font-medium text-ink">
               <dt>To pay</dt>
               <dd className="tabular-nums">
-                {typeof p.to_pay === "number" ? formatINR(p.to_pay) : "Shown in Swiggy"}
+                {typeof bill.to_pay === "number" ? formatINR(bill.to_pay) : "Shown in Swiggy"}
               </dd>
             </div>
           </dl>
+          {cart?.offers?.coupon_applied && (
+            <p className="text-xs text-leaf-text mt-2">Coupon {cart.offers.coupon_applied} applied</p>
+          )}
+          {bill.unbalanced && (
+            <p className="text-xs text-ember-text leading-relaxed mt-3">
+              Swiggy&apos;s breakdown here doesn&apos;t add up to its total, so a charge is
+              missing from what it sent. The Swiggy app shows the full bill.
+            </p>
+          )}
           <p className="text-xs text-ink-muted leading-relaxed mt-3">
-            Swiggy sets these amounts. The final total, including any change in delivery
-            fee, is confirmed in the Swiggy app.
+            Swiggy sets these amounts for the address above. The Swiggy app can show a
+            different total when it has another delivery address selected, a coupon applied
+            only there, or a Swiggy One discount. The app&apos;s total is the one you pay.
           </p>
         </section>
       )}

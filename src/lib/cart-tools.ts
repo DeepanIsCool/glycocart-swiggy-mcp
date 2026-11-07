@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { linePrice, normalizeBill } from "./cart-bill";
 import { tool } from "ai";
 import type { Client } from "@modelcontextprotocol/client";
 import { callSwiggyRaw, unwrapSwiggy } from "./swiggy-tools";
@@ -105,18 +106,23 @@ function shapeCart(res: any, profile: UserProfile) {
     // Swiggy's `deliverySubtitle` is the delivery ETA ("35-40 mins"), not an
     // address. It was shown as "Delivering to 35-40 mins".
     delivery_eta: data?.restaurant?.deliverySubtitle ?? null,
-    items: items.map((i: any) => ({
-      menu_item_id: String(i.menu_item_id),
-      name: i.name,
-      quantity: i.quantity,
-      price: i.final_price ?? i.total ?? i.subtotal,
-      strikeout_price: i.final_price != null && i.total > i.final_price ? i.total : undefined,
-      image_url: swiggyImageUrl(i.imageUrl),
-      in_stock: i.in_stock === undefined ? true : Boolean(i.in_stock)
-    })),
-    // Pricing always comes from Swiggy — never computed here, because taxes and
-    // delivery charges are theirs to determine.
+    items: items.map((i: any) => {
+      const { each, line } = linePrice(i);
+      return {
+        menu_item_id: String(i.menu_item_id),
+        name: i.name,
+        quantity: i.quantity,
+        // Per item and per line only when Swiggy's fields make it unambiguous.
+        price_each: each,
+        price_line: line,
+        image_url: swiggyImageUrl(i.imageUrl),
+        in_stock: i.in_stock === undefined ? true : Boolean(i.in_stock)
+      };
+    }),
+    // Pricing always comes from Swiggy, never computed here. `bill` is every
+    // charge Swiggy sent, in its order; `pricing` is the raw object.
     pricing: data?.pricing ?? null,
+    bill: normalizeBill(data?.pricing ?? data?.bill ?? data?.billDetails ?? data?.bill_details ?? data?.billing),
     offers: data?.offers ?? null,
     glucose: summariseCartGlucose(items, profile),
     checkout_note:
